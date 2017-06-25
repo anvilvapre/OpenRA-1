@@ -371,7 +371,8 @@ namespace OpenRA
 			return null;
 		}
 
-		uint nextAID = 0;
+		public const uint actorIdNull = 0;
+		uint nextAID = 1;
 		internal uint NextAID()
 		{
 			return nextAID++;
