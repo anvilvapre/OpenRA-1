@@ -182,7 +182,337 @@ namespace OpenRA
 			int Queries { get; }
 		}
 
+
+
 		class TraitContainer<T> : ITraitContainer
+		{
+			protected class Element
+			{
+				public uint ActorID;
+				// Avoid heavy creation on pair objects in enumarators.
+				public TraitPair<T> Pair;
+				// Linked list to next trait for same actor.
+				public Element Next;
+				// public bool removed = false;
+
+				public Element(Actor actor, T trait) {
+					this.ActorID = actor.ActorID;
+					this.Pair = new TraitPair<T>(actor, trait);
+				}
+
+				public Element(Actor actor, T trait, Element next) {
+					this.ActorID = actor.ActorID;
+					this.Pair = new TraitPair<T>(actor, trait);
+					this.Next = next;
+				}
+			}
+
+			protected class ArrayList
+			{
+				public Element[] Elements;
+				public int Count;
+				public int Capacity;
+
+				public ArrayList(int Capacity) {
+					Count = 0;
+					this.Capacity = Capacity <= 0 ? 32 : Capacity;
+					Elements = new Element[this.Capacity];
+				}
+
+				private void Grow() {
+					Array.Resize(ref Elements, Capacity+32);
+					Capacity += 32;
+				}
+
+				public void Add(Element element) {
+					if (Count >= Capacity) {
+						Grow();
+					}
+					Elements[Count++] = element;
+				}
+
+				public void Insert(int index, Element element) {
+					if (Count >= Capacity) {
+						Grow();
+					}
+					if (index == Count) {
+						Elements[Count++] = element;
+					}
+					else {
+						Array.Copy(Elements, index, Elements, index+1, Count-index); 
+						Elements[index] = element;
+					}
+				}
+
+				public void RemoveAt(int index) {
+					if (index < 0 || index >= Count) {
+						throw new InvalidOperationException("Index out of bounds {0}".F(index));
+					}
+					Array.Copy(Elements, index, Elements, index-1, Count-index); 
+					--Count;
+				}
+			}
+
+			// Array with one element per actor, each element may link to a next trait for the same actor.
+			// 6 multi player ai game has 500 actors.
+			protected ArrayList List = new ArrayList(512);
+
+			public int Queries { get; private set; }
+
+			private Element Insert(Actor actor, T trait) {
+				// Assumption: actor is new, has highest id, so needs to be added to back.
+				var ActorID = actor.ActorID;
+				int index = 0;
+				Element element = null;
+				var elements = List.Elements;
+				for (int i=List.Count-1; i >= 0; --i) {
+					var el = elements[i];
+					var aid = el.ActorID;
+					if (aid == ActorID) {
+						element = new Element(actor, trait);
+						element.Next = el;
+						elements[i] = element;
+						break;
+					}
+					else if (aid < ActorID) {
+						index = i+1;
+						break;
+					}
+				}
+				if (element == null) {
+					element = new Element(actor, trait);
+					List.Insert(index, element);
+				}
+				return element;
+			}
+
+			public void Add(Actor actor, object trait) 
+			{
+				Insert(actor, (T)trait);
+			}
+
+			private Element FindActor(uint ActorID) {
+				var start = 0;
+				var end = List.Count;
+				var elements = List.Elements;
+				while (start != end)
+				{
+					var mid = (start + end) / 2;
+					var el = elements[mid];
+					var aid = el.ActorID;
+					if (aid == ActorID)
+						return el;
+					if (aid < ActorID)
+						start = mid + 1;
+					else
+						end = mid;
+				}
+				return null;
+			}
+
+			private int FindActorIndex(uint ActorID) {
+				var start = 0;
+				var end = List.Count;
+				var elements = List.Elements;
+				while (start != end)
+				{
+					var mid = (start + end) / 2;
+					var el = elements[mid];
+					var aid = el.ActorID;
+					if (aid == ActorID)
+						return mid;
+					if (aid < ActorID)
+						start = mid + 1;
+					else
+						end = mid;
+				}
+				return -1;
+			}
+
+			public T Get(uint actorID)
+			{
+				++Queries;
+				var element = FindActor(actorID);
+				if (element == null)
+					throw new InvalidOperationException("Actor does not have trait of type `{0}`".F(typeof(T)));
+				if (element.Next != null)
+					throw new InvalidOperationException("Actor {0} has multiple traits of type `{1}`".F(element.Pair.Actor.Info.Name, typeof(T)));
+				return element.Pair.Trait;
+			}
+
+			public T GetOrDefault(uint actorID)
+			{
+				++Queries;
+				var element = FindActor(actorID);
+				if (element == null)
+					return default(T);
+				if (element.Next != null)
+					throw new InvalidOperationException("Actor {0} has multiple traits of type `{1}`".F(element.Pair.Actor.Info.Name, typeof(T)));
+				return element.Pair.Trait;
+			}
+
+			public IEnumerable<T> GetMultiple(uint actorID)
+			{
+				++Queries;
+				var element = FindActor(actorID);
+				if (element == null)
+					throw new InvalidOperationException("Actor does not have trait of type `{0}`".F(typeof(T)));
+				return new ActorMultipleEnumerable(element);
+			}
+
+			class ActorMultipleEnumerable : IEnumerable<T>
+			{
+				readonly Element element;
+				public ActorMultipleEnumerable(Element element) { this.element = element; }
+				public IEnumerator<T> GetEnumerator() { return new ActorMultipleEnumerator(element); }
+				System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
+			}
+
+			class ActorMultipleEnumerator : IEnumerator<T>
+			{
+				readonly Element element;
+				Element it;
+
+				public ActorMultipleEnumerator(Element element)
+				{
+					this.element = element;
+					it = null;
+				}
+
+				public void Reset() { it = null; }
+				public bool MoveNext() { if (it == null) { it = element; } else { it = it.Next; } return it != null; }
+				public T Current { get { return it.Pair.Trait; } }
+				object System.Collections.IEnumerator.Current { get { return Current; } }
+				public void Dispose() { it = null; }
+			}
+
+			public IEnumerable<TraitPair<T>> All()
+			{
+				// PERF: Custom enumerator for efficiency - using `yield` is slower.
+				++Queries;
+				return new AllEnumerable(this);
+			}
+
+			class AllEnumerable : IEnumerable<TraitPair<T>>
+			{
+				readonly TraitContainer<T> container;
+				public AllEnumerable(TraitContainer<T> container) { this.container = container; }
+				public IEnumerator<TraitPair<T>> GetEnumerator() { return new AllEnumerator(container); }
+				System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
+			}
+
+			class AllEnumerator : IEnumerator<TraitPair<T>>
+			{
+				readonly ArrayList list;
+				int actorIndex;
+				Element it;
+				public AllEnumerator(TraitContainer<T> container)
+				{
+					list = container.List;
+					it = null;
+				}
+
+				public void Reset() { actorIndex = -1; it = null; }
+				public bool MoveNext() 
+				{ 
+					if (it != null) {
+						it = it.Next;
+					}
+					if (it == null) {
+						if (++actorIndex > list.Count)
+							return false;
+						it = list.Elements[actorIndex];
+					}
+					return true;
+				}
+
+				public TraitPair<T> Current { get { return it.Pair; } }
+				object System.Collections.IEnumerator.Current { get { return Current; } }
+				public void Dispose() { it = null; }
+			}
+
+			public IEnumerable<Actor> Actors()
+			{
+				++Queries;
+				return new ActorEnumerable(this);
+			}
+
+			class ActorEnumerable : IEnumerable<Actor>
+			{
+				readonly TraitContainer<T> container;
+				public ActorEnumerable(TraitContainer<T> container) { this.container = container; }
+				public IEnumerator<Actor> GetEnumerator() { return new ActorEnumerator(container); }
+				System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
+			}
+
+			class ActorEnumerator : IEnumerator<Actor>
+			{
+				readonly ArrayList list;
+				int actorIndex;
+				public ActorEnumerator(TraitContainer<T> container)
+				{
+					list = container.List;
+				}
+
+				public void Reset() { actorIndex = -1; }
+				public bool MoveNext() { return (++actorIndex < list.Count); }
+				public Actor Current { get { return list.Elements[actorIndex].Pair.Actor; } }
+				object System.Collections.IEnumerator.Current { get { return Current; } }
+				public void Dispose() { }
+			}
+
+			public IEnumerable<Actor> Actors(Func<T, bool> predicate)
+			{
+				++Queries;
+				return new ActorPredicateEnumerable(this, predicate);
+			}
+
+			class ActorPredicateEnumerable : IEnumerable<Actor>
+			{
+				readonly TraitContainer<T> container;
+				readonly Func<T, bool> predicate;
+				public ActorPredicateEnumerable(TraitContainer<T> container, Func<T, bool> predicate) { this.container = container; this.predicate = predicate; }
+				public IEnumerator<Actor> GetEnumerator() { return new ActorPredicateEnumerator(container, predicate); }
+				System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
+			}
+
+			class ActorPredicateEnumerator : IEnumerator<Actor>
+			{
+				readonly ArrayList list;
+				int actorIndex;
+				readonly Func<T, bool> predicate;
+				public ActorPredicateEnumerator(TraitContainer<T> container, Func<T, bool> predicate)
+				{
+					list = container.List;
+					this.predicate = predicate;
+				}
+
+				public void Reset() { actorIndex = -1; }
+				public bool MoveNext() 
+				{ 
+					while (++actorIndex < list.Count) {
+						if (predicate(list.Elements[actorIndex].Pair.Trait)) {
+							return true;
+						}
+					}
+					return false;
+				}
+				public Actor Current { get { return list.Elements[actorIndex].Pair.Actor; } }
+				object System.Collections.IEnumerator.Current { get { return Current; } }
+				public void Dispose() { }
+			}
+
+			public void RemoveActor(uint actor)
+			{
+				var index = FindActorIndex(actor);
+				if (index < 0) {
+					throw new InvalidOperationException("Actor with id {0} not fond".F(typeof(T)));
+				}
+				List.RemoveAt(index);
+			}
+		}
+/*
+		class DisabledTraitContainer<T> : ITraitContainer
 		{
 			readonly List<Actor> actors = new List<Actor>();
 			readonly List<T> traits = new List<T>();
@@ -326,5 +656,6 @@ namespace OpenRA
 				traits.RemoveRange(startIndex, count);
 			}
 		}
+	*/
 	}
 }
