@@ -207,6 +207,7 @@ namespace OpenRA
 				CALL_ACTORS,
 				CALL_ACTORS_PREDICATE,
 				CALL_REMOVE_ACTOR,
+				CALL_ENUM_MULTIPLE,
 				TIME_GET,
 				TIME_GET_OR_DEFAULT,
 				TIME_GET_MULTIPLE,
@@ -214,6 +215,7 @@ namespace OpenRA
 				TIME_ACTORS,
 				TIME_ACTORS_PREDICATE,
 				TIME_REMOVE_ACTOR,
+				TIME_ENUM_MULTIPLE,
 				_MAX
 			}
 
@@ -225,6 +227,69 @@ namespace OpenRA
 
 			public double[] SumValues = new double[(int)SumId._MAX];
 			public double[] MaxValues = new double[(int)MaxId._MAX];
+		}
+
+		class ProfilingEnumerable<T> : IEnumerable<T>
+		{
+			private readonly int statCall;
+			private readonly int statTime;
+			private readonly TraitContainerStat stat;
+			private readonly IEnumerable<T> parent;
+
+			public ProfilingEnumerable(TraitContainerStat stat, int statCall, int statTime, IEnumerable<T> parent)
+			{
+				this.stat = stat;
+				this.statCall = statCall;
+				this.statTime = statTime;
+				this.parent = parent;
+			}
+
+			public IEnumerator<T> GetEnumerator() { return new ProfilingEnumerator<T>(stat, statCall, statTime, parent.GetEnumerator()); }
+
+			System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
+		}
+
+		class ProfilingEnumerator<T> : IEnumerator<T>
+		{
+			private readonly int statCall;
+			private readonly int statTime;
+			private readonly TraitContainerStat stat;
+			private readonly IEnumerator<T> parent;
+
+			public ProfilingEnumerator(TraitContainerStat stat, int statCall, int statTime, IEnumerator<T> parent)
+			{
+				this.stat = stat;
+				this.statCall = statCall;
+				this.statTime = statTime;
+				this.parent = parent;
+			}
+
+			public void Reset() { parent.Reset(); }
+			public bool MoveNext()
+			{
+				Stopwatch sw = Stopwatch.StartNew();
+				bool temp = parent.MoveNext();
+				sw.Stop();
+				stat.SumValues[statTime] += sw.Elapsed.TotalMilliseconds;
+				stat.SumValues[statCall]++;
+				return temp;
+			}
+
+			public T Current
+			{
+				get
+				{
+					Stopwatch sw = Stopwatch.StartNew();
+					var temp = parent.Current;
+					sw.Stop();
+					stat.SumValues[statTime] += sw.Elapsed.TotalMilliseconds;
+					stat.SumValues[statCall]++;
+					return temp;
+				}
+			}
+
+			object System.Collections.IEnumerator.Current { get { return Current; } }
+			public void Dispose() { }
 		}
 
 		class ProfilingTraitContainer<T> : ITraitContainer
@@ -246,6 +311,7 @@ namespace OpenRA
 			public uint CountActors;
 			public uint CountActorsPredicate;
 			public uint CountRemoveActor;
+			private TraitContainerStat stat = new TraitContainerStat();
 
 			private TraitContainer<T> container;
 			public int Queries
@@ -297,7 +363,10 @@ namespace OpenRA
 				TimeSpanGetMultiple += sw.Elapsed;
 				CountGetMultiple++;
 				Count++;
-				return temp;
+				return new ProfilingEnumerable<T>(stat,
+					(int)TraitContainerStat.SumId.CALL_ENUM_MULTIPLE,
+					(int)TraitContainerStat.SumId.TIME_ENUM_MULTIPLE,
+					temp);
 			}
 
 			public IEnumerable<TraitPair<T>> All()
@@ -373,6 +442,7 @@ namespace OpenRA
 				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ACTORS_PREDICATE] = CountActorsPredicate;
 				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ACTORS_PREDICATE] = CountActorsPredicate;
 				stat.SumValues[(int)TraitContainerStat.SumId.CALL_REMOVE_ACTOR] = CountRemoveActor;
+				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_MULTIPLE] = this.stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_MULTIPLE];
 
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_GET] = TimeSpanGet.TotalMilliseconds;
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_GET_OR_DEFAULT] = TimeSpanGetOrDefault.TotalMilliseconds;
@@ -381,6 +451,7 @@ namespace OpenRA
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ACTORS] = TimeSpanActors.TotalMilliseconds;
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ACTORS_PREDICATE] = TimeSpanActorsPredicate.TotalMilliseconds;
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_REMOVE_ACTOR] = TimeSpanRemoveActor.TotalMilliseconds;
+				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_MULTIPLE] = this.stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_MULTIPLE];
 				return stat;
 			}
 		}
