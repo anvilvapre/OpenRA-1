@@ -8,12 +8,15 @@
  * information, see COPYING.
  */
 #endregion
+//#define _TRAIT_CONTAINER_NEW_
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using OpenRA.Primitives;
+
 
 namespace OpenRA
 {
@@ -41,7 +44,7 @@ namespace OpenRA
 	/// </summary>
 	class TraitDictionary
 	{
-		// static readonly Func<Type, ITraitContainer> CreateTraitContainer = t =>
+		 // static readonly Func<Type, ITraitContainer> CreateTraitContainer = t =>
 		//	(ITraitContainer)typeof(TraitContainer<>).MakeGenericType(t).GetConstructor(Type.EmptyTypes).Invoke(null);
 		static readonly Func<Type, ITraitContainer> CreateTraitContainer = t =>
 			(ITraitContainer)typeof(ProfilingTraitContainer<>).MakeGenericType(t).GetConstructor(Type.EmptyTypes).Invoke(null);
@@ -62,7 +65,7 @@ namespace OpenRA
 			else
 			{
 				if (traits.Length < newSize)
-					Array.Resize(ref traits, newSize);
+					Array.Resize<ITraitContainer>(ref traits, newSize);
 			}
 		}
 
@@ -94,9 +97,9 @@ namespace OpenRA
 			return InnerGet(TraitTypeIndexMap.RegisterType(t), t);
 		}
 
-		TraitContainer<T> InnerGet<T>()
+		ProfilingTraitContainer<T> InnerGet<T>()
 		{
-			return (TraitContainer<T>)InnerGet(TraitTypeIndex<T>.GetTypeIndex(), typeof(T));
+			return (ProfilingTraitContainer<T>)InnerGet(TraitTypeIndex<T>.GetTypeIndex(), typeof(T));
 		}
 
 		public void PrintReport()
@@ -118,7 +121,7 @@ namespace OpenRA
 			{
 				var trait = traits[i];
 				if (trait != null)
-					trait.PrintReport(ChannelId);
+					trait.PrintReport(ChannelId, i);
 			}
 		}
 
@@ -178,10 +181,9 @@ namespace OpenRA
 
 		public void RemoveActor(Actor a)
 		{
-			foreach (var t in traits) {
+			foreach (var t in traits) 
 				if (t != null)
 					t.RemoveActor(a.ActorID);
-			}
 		}
 
 		interface ITraitContainer
@@ -189,7 +191,7 @@ namespace OpenRA
 			void Add(Actor actor, object trait);
 			void RemoveActor(uint actor);
 			int Queries { get; }
-			void PrintReport(string logChannel);
+			void PrintReport(string logChannel, int traitIndex);
 		}
 
 		class TraitContainerStat
@@ -208,6 +210,8 @@ namespace OpenRA
 				CALL_ACTORS_PREDICATE,
 				CALL_REMOVE_ACTOR,
 				CALL_ENUM_MULTIPLE,
+				CALL_ENUM_ACTOR,
+				CALL_ENUM_ALL,
 				TIME_GET,
 				TIME_GET_OR_DEFAULT,
 				TIME_GET_MULTIPLE,
@@ -216,6 +220,8 @@ namespace OpenRA
 				TIME_ACTORS_PREDICATE,
 				TIME_REMOVE_ACTOR,
 				TIME_ENUM_MULTIPLE,
+				TIME_ENUM_ACTOR,
+				TIME_ENUM_ALL,
 				_MAX
 			}
 
@@ -227,6 +233,16 @@ namespace OpenRA
 
 			public double[] SumValues = new double[(int)SumId._MAX];
 			public double[] MaxValues = new double[(int)MaxId._MAX];
+
+			public TraitContainerStat()
+			{
+				for (int i = 0; i < SumValues.Length; i++) {
+					SumValues[i] = -1.0;
+				}
+				for (int i = 0; i < MaxValues.Length; i++) {
+					MaxValues[i] = -1.0;
+				}
+			}
 		}
 
 		class ProfilingEnumerable<T> : IEnumerable<T>
@@ -312,8 +328,8 @@ namespace OpenRA
 			public uint CountActorsPredicate;
 			public uint CountRemoveActor;
 			private TraitContainerStat stat = new TraitContainerStat();
+			private TraitContainer<T> container = new TraitContainer<T>(); 
 
-			private TraitContainer<T> container;
 			public int Queries
 			{
 				get
@@ -347,7 +363,7 @@ namespace OpenRA
 			public T GetOrDefault(uint actorID)
 			{
 				Stopwatch sw = Stopwatch.StartNew();
-				var temp = container.Get(actorID);
+				var temp = container.GetOrDefault(actorID);
 				sw.Stop();
 				TimeSpanGetOrDefault += sw.Elapsed;
 				CountGetOrDefault++;
@@ -412,17 +428,23 @@ namespace OpenRA
 				Count++;
 			}
 
-			public void PrintReport(string logChannel)
+			public void PrintReport(string logChannel, int traitIndex)
 			{
-				container.PrintReport(logChannel);
+				container.PrintReport(logChannel, traitIndex);
 				Console.WriteLine("Profile report for trait {0} ", typeof(T));
-				TraitContainerStat stat = container.GetStat();
+				TraitContainerStat stat = GetStat();
+				StringBuilder sb = new StringBuilder();
+				if (traitIndex == 1) {
+					sb.Append("Trait");
+					for (var i = 0; i < (int)TraitContainerStat.SumId._MAX; i++)
+						sb.Append("\t").Append(((TraitContainerStat.SumId)i).ToString());
+					Log.Write(logChannel, sb.ToString());
+					sb = new StringBuilder();
+				}
+				sb.Append(typeof(T));
 				for (var i = 0; i < (int)TraitContainerStat.SumId._MAX; i++)
-					Console.Write("\t{0}", ((TraitContainerStat.SumId)i).ToString());
-				Console.WriteLine("");
-				for (var i = 0; i < (int)TraitContainerStat.SumId._MAX; i++)
-					Console.Write("\t{0}", stat.SumValues[i]);
-				Console.WriteLine("");
+					sb.Append("\t").Append(stat.SumValues[i]);
+				Log.Write(logChannel, sb.ToString());
 			}
 
 			public TraitContainerStat GetStat()
@@ -443,6 +465,8 @@ namespace OpenRA
 				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ACTORS_PREDICATE] = CountActorsPredicate;
 				stat.SumValues[(int)TraitContainerStat.SumId.CALL_REMOVE_ACTOR] = CountRemoveActor;
 				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_MULTIPLE] = this.stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_MULTIPLE];
+				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_ACTOR] = this.stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_ACTOR];
+				stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_ALL] = this.stat.SumValues[(int)TraitContainerStat.SumId.CALL_ENUM_ALL];
 
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_GET] = TimeSpanGet.TotalMilliseconds;
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_GET_OR_DEFAULT] = TimeSpanGetOrDefault.TotalMilliseconds;
@@ -452,9 +476,12 @@ namespace OpenRA
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ACTORS_PREDICATE] = TimeSpanActorsPredicate.TotalMilliseconds;
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_REMOVE_ACTOR] = TimeSpanRemoveActor.TotalMilliseconds;
 				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_MULTIPLE] = this.stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_MULTIPLE];
+				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_ACTOR] = this.stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_ACTOR];
+				stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_ALL] = this.stat.SumValues[(int)TraitContainerStat.SumId.TIME_ENUM_ALL];
 				return stat;
 			}
 		}
+#if _TRAIT_CONTAINER_NEW_
 
 		class TraitContainer<T> : ITraitContainer
 		{
@@ -478,9 +505,9 @@ namespace OpenRA
 				public void AddTrait(T trait)
 				{
 					var size = this.Pairs.Length + 1;
-					Array.Resize(ref this.Pairs, size);
+					Array.Resize<TraitPair<T> >(ref this.Pairs, size);
 					this.Pairs[size - 1] = new TraitPair<T>(this.Pairs[0].Actor, trait);
-					Array.Resize(ref this.Traits, size);
+					Array.Resize<T>(ref this.Traits, size);
 					this.Traits[size - 1] = trait;
 				}
 			}
@@ -501,7 +528,7 @@ namespace OpenRA
 				private void Grow()
 				{
 					const int CapInc = 32;
-					Array.Resize(ref Elements, capacity + CapInc);
+					Array.Resize<Element>(ref Elements, capacity + CapInc);
 					capacity += CapInc;
 				}
 
@@ -510,7 +537,7 @@ namespace OpenRA
 					var half = capacity >> 2;
 					if (half >= Count && half > 0)
 					{
-						Array.Resize(ref Elements, half);
+						Array.Resize<Element>(ref Elements, half);
 						capacity = half;
 					}
 				}
@@ -543,6 +570,7 @@ namespace OpenRA
 					--Count;
 					if (index < Count)
 						Array.Copy(Elements, index + 1, Elements, index, Count - index);
+					Elements[Count] = null;
 					Shrink();
 				}
 			}
@@ -588,6 +616,66 @@ namespace OpenRA
 			public void Add(Actor actor, object trait)
 			{
 				Insert(actor, (T)trait);
+				// disabled
+				if (list.Count == -1) {
+					SelfTest(list.Count);
+				}
+			}
+
+			private void SelfTest(int ac) {
+				int actorCount = 0;
+				foreach (var a in Actors()) {
+					actorCount += 1;
+				}
+				if (actorCount != ac) {
+					throw new InvalidOperationException("Actor enum {0}".F(actorCount));
+				}
+				uint lastActorId = 0xffff;
+				actorCount = 0;
+				int traitCount = 0;
+				foreach (var p in All()) {
+					if (p.Actor.ActorID != lastActorId) {
+						actorCount+=1;
+						lastActorId = p.Actor.ActorID;
+					}
+					traitCount+=1;
+				}
+				if (actorCount != ac) {
+					throw new InvalidOperationException("All enum {0}".F(actorCount));
+				}
+				int tc = 0;
+				int pc = 0;
+				foreach (var el in list.Elements) {
+					if (el != null) {
+						tc += el.Traits.Length;
+						pc += el.Pairs.Length;
+					}
+				}
+				if (tc != pc) {
+					throw new InvalidOperationException("trait cound enum hm {0} {1}".F(tc, traitCount));
+				}
+				if (tc != traitCount) {
+					Console.WriteLine("aaaaaaaaa");
+					foreach (var el in list.Elements) {
+						if (el != null) {
+							int i=0;
+							foreach (var t in el.Traits) {
+								Console.WriteLine("list.el.trait {0} {1} {2}", i, t, el.Pairs[0].Actor.Info.Name);
+								i++;
+							}
+						}
+					}
+
+					Console.WriteLine("aaaaaaaaabbbbbbbbbbbbbbb");
+					int j = 0;
+					foreach (var p in All()) {
+						Console.WriteLine("iter {0} {1} {2}", j, p.Trait, p.Actor.Info.Name);
+						j++;
+					}
+					Console.WriteLine("aaaaaaaaabbbbbbbbbbbbbbcccccccccccccccccb");
+
+					throw new InvalidOperationException("trait cound enum elem: {0}  iter:{1}".F(tc, traitCount));
+				}
 			}
 
 			private Element FindActor(uint actorID)
@@ -658,7 +746,8 @@ namespace OpenRA
 				++Queries;
 				var element = FindActor(actorID);
 				if (element == null)
-					throw new InvalidOperationException("Actor does not have trait of type `{0}`".F(typeof(T)));
+					return Enumerable.Empty<T>();
+					//throw new InvalidOperationException("Actor {1} does not have trait of type `{0}`".F(typeof(T), actorID));
 				return element.Traits;
 			}
 
@@ -694,28 +783,32 @@ namespace OpenRA
 				public void Reset() { actorIndex = -1; traitIndex = -1; pairs = null; }
 				public bool MoveNext()
 				{
-					if (actorIndex >= 0) {
+					if (actorIndex >= 0) 
+					{
 						if (actorIndex >= list.Count)
+						{
+							pairs = null;
 							return false;
+						}
 
-						// assert(pairs != null);
 						if (++traitIndex < pairs.Length)
 							return true;
 						else
 						{
 							if (++actorIndex < list.Count) {
-								traitIndex = -1;
 								pairs = list.Elements[actorIndex].Pairs;
+								traitIndex = 0;
 								return true;
 							}
 						}
 					}
 					else
 					{
+						// Start
 						if (++actorIndex < list.Count)
 						{
-							// assert(traitIndex == -1);
 							pairs = list.Elements[actorIndex].Pairs;
+							traitIndex = 0;
 							return true;
 						}
 					}
@@ -723,7 +816,7 @@ namespace OpenRA
 					return false;
 				}
 
-				public TraitPair<T> Current { get { return pairs[actorIndex]; } }
+				public TraitPair<T> Current { get { return pairs[traitIndex]; } }
 				object System.Collections.IEnumerator.Current { get { return Current; } }
 				public void Dispose() { pairs = null; }
 			}
@@ -749,6 +842,7 @@ namespace OpenRA
 				public ActorEnumerator(TraitContainer<T> container)
 				{
 					list = container.list;
+					actorIndex = -1;
 				}
 
 				public void Reset() { actorIndex = -1; }
@@ -782,6 +876,7 @@ namespace OpenRA
 				public ActorPredicateEnumerator(TraitContainer<T> container, Func<T, bool> predicate)
 				{
 					list = container.list;
+					actorIndex = -1;
 					this.predicate = predicate;
 				}
 
@@ -810,11 +905,11 @@ namespace OpenRA
 			{
 				var index = FindActorIndex(actorID);
 				if (index < 0)
-					throw new InvalidOperationException("Actor with id {0} not fond".F(typeof(T)));
+					return;
 				list.RemoveAt(index);
 			}
 
-			public void PrintReport(string logChannel)
+			public void PrintReport(string logChannel, int traitIndex)
 			{
 			}
 
@@ -826,6 +921,9 @@ namespace OpenRA
 				double maxTraitCount = 0;
 				foreach (var element in list.Elements)
 				{
+					if (element == null) {
+						break;
+					}
 					traitCount += element.Traits.Length;
 					if (element.Traits.Length > maxTraitCount)
 						maxTraitCount = element.Traits.Length;
@@ -836,9 +934,9 @@ namespace OpenRA
 				return stat;
 			}
 		}
+#else
 
-/*
-		class DisabledTraitContainer<T> : ITraitContainer
+		class TraitContainer<T> : ITraitContainer
 		{
 			readonly List<Actor> actors = new List<Actor>();
 			readonly List<T> traits = new List<T>();
@@ -848,6 +946,7 @@ namespace OpenRA
 			public void Add(Actor actor, object trait)
 			{
 				var insertIndex = actors.BinarySearchMany(actor.ActorID + 1);
+		//Console.WriteLine("=== Add {0}, {1}, type {2} index {3}", actor, actor.ActorID, typeof(T), insertIndex);
 				actors.Insert(insertIndex, actor);
 				traits.Insert(insertIndex, (T)trait);
 			}
@@ -981,7 +1080,16 @@ namespace OpenRA
 				actors.RemoveRange(startIndex, count);
 				traits.RemoveRange(startIndex, count);
 			}
+
+			public void PrintReport(string logChannel, int traitIndex)
+			{
+			}
+
+			public TraitContainerStat GetStat()
+			{
+				return null;
+			}
 		}
-	*/
+#endif
 	}
 }
