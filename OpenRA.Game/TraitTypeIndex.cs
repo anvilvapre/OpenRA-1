@@ -18,38 +18,35 @@ namespace OpenRA
 	{
 		private static Dictionary<Type, int> map = new Dictionary<Type, int>();
 
-		public static int RegisterType(Type t) {
+		public static int RegisterType(Type t)
+		{
 			int index;
-			if (map.TryGetValue(t, out index)) {
+			if (map.TryGetValue(t, out index))
 				return index;
-			}
-
 			index = map.Count + 1;
 			map.Add(t, index);
 			return index;
 		}
 
-		public static int FindType(Type t) {
+		public static int FindType(Type t)
+		{
 			int index;
-			if (map.TryGetValue(t, out index)) {
+			if (map.TryGetValue(t, out index))
 				return index;
-			}
-
 			return 0;
 		}
 
-		public static int GetCount() {
+		public static int GetCount()
+		{
 			return map.Count;
 		}
 
-		public static Type GetType(int index) {
-			if (index > 0 && index < map.Count) {
-				foreach (var t in map) {
+		public static Type GetType(int index)
+		{
+			if (index > 0 && index < map.Count)
+				foreach (var t in map)
 					if (t.Value == index)
 						return t.Key;
-				}
-			}
-
 			return null;
 		}
 	}
@@ -58,15 +55,15 @@ namespace OpenRA
 	public class TraitTypeIndex<T>
 	{
 		private static int typeIndex = 0;
-		public static int GetTypeIndex() {
-			if (typeIndex == 0) {
+		public static int GetTypeIndex()
+		{
+			if (typeIndex == 0)
 				typeIndex = TraitTypeIndexMap.RegisterType(typeof(T));
-			}
-
 			return typeIndex;
 		}
 
-		public static bool IsRegistered() {
+		public static bool IsRegistered()
+		{
 			return typeIndex != 0;
 		}
 	}
