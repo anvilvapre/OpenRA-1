@@ -161,7 +161,7 @@ namespace OpenRA.Mods.Common.Widgets
 							lastX = x;
 							lastPoint = point;
 							return graphOrigin + new float3(x * xStep, -point * scale, 0);
-						}), 1, color);
+						}).ToArray(), 1, color);
 
 					if (lastPoint != 0f)
 						labelFont.DrawTextWithShadow(GetValueFormat().F(lastPoint), graphOrigin + new float2(lastX * xStep, -lastPoint * scale - 2),
