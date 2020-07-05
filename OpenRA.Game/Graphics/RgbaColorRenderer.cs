@@ -92,10 +92,10 @@ namespace OpenRA.Graphics
 
 		void DrawDisconnectedLine(float3[] points, float width, Color color)
 		{
-			if (points.Length > 1) 
+			if (points.Length > 1)
 			{
 				var lastPoint = points[0];
-				for (var i = 1; i < points.Length; i++) 
+				for (var i = 1; i < points.Length; i++)
 				{
 					var point = points[i];
 					DrawLine(lastPoint, point, width, color);
