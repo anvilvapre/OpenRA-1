@@ -58,8 +58,9 @@ namespace OpenRA
 		public void PrintReport()
 		{
 			Log.AddChannel("traitreport", "traitreport.log");
+			Log.Write("traitreport", "Actors\tTraits\tQTotal\tQActors\tQAPred\tQAll\tQGet\tQMult\tQMulNA\tTrait");
 			foreach (var t in traits.OrderByDescending(t => t.Value.Queries).TakeWhile(t => t.Value.Queries > 0))
-				Log.Write("traitreport", "{0}: {1}", t.Key.Name, t.Value.Queries);
+				t.Value.PrintReport();
 		}
 
 		public void AddTrait(Actor actor, object val)
@@ -126,6 +127,7 @@ namespace OpenRA
 		{
 			void Add(Actor actor, object trait);
 			void RemoveActor(uint actor);
+			void PrintReport();
 
 			int Queries { get; }
 		}
@@ -136,8 +138,12 @@ namespace OpenRA
 			static readonly IEnumerable<TraitPair<T>> EmptyTraitPairEnumerable = Enumerable.Empty<TraitPair<T>>();
 			readonly List<Actor> actors = new List<Actor>();
 			readonly List<T> traits = new List<T>();
-
-			public int Queries { get; private set; }
+			int QueriesActors = 0;
+			int QueriesActorsPredicate = 0;
+			int QueriesAll = 0;
+			int QueriesGet = 0;
+			int QueriesMultiple = 0;
+			int QueriesMultipleNoMatch = 0;
 
 			public void Add(Actor actor, object trait)
 			{
@@ -156,7 +162,7 @@ namespace OpenRA
 
 			public T GetOrDefault(Actor actor)
 			{
-				++Queries;
+				++QueriesGet;
 				var index = actors.BinarySearchMany(actor.ActorID);
 				if (index >= actors.Count || actors[index] != actor)
 					return default(T);
@@ -168,12 +174,15 @@ namespace OpenRA
 			public IEnumerable<T> GetMultiple(uint actor)
 			{
 				// PERF: Custom enumerator for efficiency - using `yield` is slower.
-				++Queries;
+				++QueriesMultiple;
 				int start = actors.BinarySearchMany(actor);
 				if (start < actors.Count && actors[start].ActorID == actor)
 					return new MultipleEnumerable(this, actor, start);
 				else
+				{
+					++QueriesMultipleNoMatch;
 					return EmptyTraitEnumerable;
+				}
 			}
 
 			class MultipleEnumerable : IEnumerable<T>
@@ -212,7 +221,7 @@ namespace OpenRA
 			public IEnumerable<TraitPair<T>> All()
 			{
 				// PERF: Custom enumerator for efficiency - using `yield` is slower.
-				++Queries;
+				++QueriesAll;
 				if (actors.Count == 0)
 					return EmptyTraitPairEnumerable;
 				else
@@ -221,7 +230,7 @@ namespace OpenRA
 
 			public IEnumerable<Actor> Actors()
 			{
-				++Queries;
+				++QueriesActors;
 				Actor last = null;
 				for (var i = 0; i < actors.Count; i++)
 				{
@@ -234,7 +243,7 @@ namespace OpenRA
 
 			public IEnumerable<Actor> Actors(Func<T, bool> predicate)
 			{
-				++Queries;
+				++QueriesActorsPredicate;
 				Actor last = null;
 				for (var i = 0; i < actors.Count; i++)
 				{
@@ -283,6 +292,35 @@ namespace OpenRA
 				var count = endIndex - startIndex;
 				actors.RemoveRange(startIndex, count);
 				traits.RemoveRange(startIndex, count);
+			}
+			
+			public int Queries
+			{ 
+				get
+				{
+					return QueriesActors
+						+ QueriesActorsPredicate
+						+ QueriesAll
+						+ QueriesGet
+						+ QueriesMultiple
+						+ QueriesMultipleNoMatch;
+				}
+			}
+
+			public void PrintReport()
+			{
+				Log.Write("traitreport",
+					"{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}",
+					actors.Count,
+					traits.Count,
+					Queries,
+					QueriesActors,
+					QueriesActorsPredicate,
+					QueriesAll,
+					QueriesGet,
+					QueriesMultiple,
+					QueriesMultipleNoMatch,
+					typeof(T).Name);
 			}
 		}
 	}
