@@ -132,6 +132,8 @@ namespace OpenRA
 
 		class TraitContainer<T> : ITraitContainer
 		{
+			static readonly IEnumerable<T> EmptyTraitEnumerable = Enumerable.Empty<T>();
+			static readonly IEnumerable<TraitPair<T>> EmptyTraitPairEnumerable = Enumerable.Empty<TraitPair<T>>();
 			readonly List<Actor> actors = new List<Actor>();
 			readonly List<T> traits = new List<T>();
 
@@ -167,15 +169,20 @@ namespace OpenRA
 			{
 				// PERF: Custom enumerator for efficiency - using `yield` is slower.
 				++Queries;
-				return new MultipleEnumerable(this, actor);
+				int start = actors.BinarySearchMany(actor);
+				if (start < actors.Count && actors[start].ActorID == actor)
+					return new MultipleEnumerable(this, actor, start);
+				else
+					return EmptyTraitEnumerable;
 			}
 
 			class MultipleEnumerable : IEnumerable<T>
 			{
 				readonly TraitContainer<T> container;
 				readonly uint actor;
-				public MultipleEnumerable(TraitContainer<T> container, uint actor) { this.container = container; this.actor = actor; }
-				public IEnumerator<T> GetEnumerator() { return new MultipleEnumerator(container, actor); }
+				readonly int start;
+				public MultipleEnumerable(TraitContainer<T> container, uint actor, int start) { this.container = container; this.actor = actor;  this.start = start; }
+				public IEnumerator<T> GetEnumerator() { return new MultipleEnumerator(container, actor, start); }
 				System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
 			}
 
@@ -185,15 +192,17 @@ namespace OpenRA
 				readonly List<T> traits;
 				readonly uint actor;
 				int index;
-				public MultipleEnumerator(TraitContainer<T> container, uint actor)
+				int start;
+				public MultipleEnumerator(TraitContainer<T> container, uint actor, int start)
 				{
 					actors = container.actors;
 					traits = container.traits;
 					this.actor = actor;
-					Reset();
+					this.start = start;
+					index = start - 1;
 				}
 
-				public void Reset() { index = actors.BinarySearchMany(actor) - 1; }
+				public void Reset() { index = start - 1; }
 				public bool MoveNext() { return ++index < actors.Count && actors[index].ActorID == actor; }
 				public T Current { get { return traits[index]; } }
 				object System.Collections.IEnumerator.Current { get { return Current; } }
@@ -204,7 +213,10 @@ namespace OpenRA
 			{
 				// PERF: Custom enumerator for efficiency - using `yield` is slower.
 				++Queries;
-				return new AllEnumerable(this);
+				if (actors.Count == 0)
+					return EmptyTraitPairEnumerable;
+				else
+					return new AllEnumerable(this);
 			}
 
 			public IEnumerable<Actor> Actors()
@@ -224,7 +236,6 @@ namespace OpenRA
 			{
 				++Queries;
 				Actor last = null;
-
 				for (var i = 0; i < actors.Count; i++)
 				{
 					if (actors[i] == last || !predicate(traits[i]))
