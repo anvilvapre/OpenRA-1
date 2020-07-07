@@ -138,12 +138,12 @@ namespace OpenRA
 			static readonly IEnumerable<TraitPair<T>> EmptyTraitPairEnumerable = Enumerable.Empty<TraitPair<T>>();
 			readonly List<Actor> actors = new List<Actor>();
 			readonly List<T> traits = new List<T>();
-			int QueriesActors = 0;
-			int QueriesActorsPredicate = 0;
-			int QueriesAll = 0;
-			int QueriesGet = 0;
-			int QueriesMultiple = 0;
-			int QueriesMultipleNoMatch = 0;
+			int queriesActors = 0;
+			int queriesActorsPredicate = 0;
+			int queriesAll = 0;
+			int queriesGet = 0;
+			int queriesMultiple = 0;
+			int queriesMultipleNoMatch = 0;
 
 			public void Add(Actor actor, object trait)
 			{
@@ -162,7 +162,7 @@ namespace OpenRA
 
 			public T GetOrDefault(Actor actor)
 			{
-				++QueriesGet;
+				++queriesGet;
 				var index = actors.BinarySearchMany(actor.ActorID);
 				if (index >= actors.Count || actors[index] != actor)
 					return default(T);
@@ -174,13 +174,13 @@ namespace OpenRA
 			public IEnumerable<T> GetMultiple(uint actor)
 			{
 				// PERF: Custom enumerator for efficiency - using `yield` is slower.
-				++QueriesMultiple;
+				++queriesMultiple;
 				int start = actors.BinarySearchMany(actor);
 				if (start < actors.Count && actors[start].ActorID == actor)
 					return new MultipleEnumerable(this, actor, start);
 				else
 				{
-					++QueriesMultipleNoMatch;
+					++queriesMultipleNoMatch;
 					return EmptyTraitEnumerable;
 				}
 			}
@@ -221,7 +221,7 @@ namespace OpenRA
 			public IEnumerable<TraitPair<T>> All()
 			{
 				// PERF: Custom enumerator for efficiency - using `yield` is slower.
-				++QueriesAll;
+				++queriesAll;
 				if (actors.Count == 0)
 					return EmptyTraitPairEnumerable;
 				else
@@ -230,7 +230,7 @@ namespace OpenRA
 
 			public IEnumerable<Actor> Actors()
 			{
-				++QueriesActors;
+				++queriesActors;
 				Actor last = null;
 				for (var i = 0; i < actors.Count; i++)
 				{
@@ -243,7 +243,7 @@ namespace OpenRA
 
 			public IEnumerable<Actor> Actors(Func<T, bool> predicate)
 			{
-				++QueriesActorsPredicate;
+				++queriesActorsPredicate;
 				Actor last = null;
 				for (var i = 0; i < actors.Count; i++)
 				{
@@ -293,17 +293,17 @@ namespace OpenRA
 				actors.RemoveRange(startIndex, count);
 				traits.RemoveRange(startIndex, count);
 			}
-			
+
 			public int Queries
-			{ 
+			{
 				get
 				{
-					return QueriesActors
-						+ QueriesActorsPredicate
-						+ QueriesAll
-						+ QueriesGet
-						+ QueriesMultiple
-						+ QueriesMultipleNoMatch;
+					return queriesActors
+						+ queriesActorsPredicate
+						+ queriesAll
+						+ queriesGet
+						+ queriesMultiple
+						+ queriesMultipleNoMatch;
 				}
 			}
 
@@ -314,12 +314,12 @@ namespace OpenRA
 					actors.Count,
 					traits.Count,
 					Queries,
-					QueriesActors,
-					QueriesActorsPredicate,
-					QueriesAll,
-					QueriesGet,
-					QueriesMultiple,
-					QueriesMultipleNoMatch,
+					queriesActors,
+					queriesActorsPredicate,
+					queriesAll,
+					queriesGet,
+					queriesMultiple,
+					queriesMultipleNoMatch,
 					typeof(T).Name);
 			}
 		}
