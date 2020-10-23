@@ -447,6 +447,7 @@ namespace OpenRA
 			PerfHistory.Items["render_widgets"].HasNormalTick = false;
 			PerfHistory.Items["render_flip"].HasNormalTick = false;
 			PerfHistory.Items["terrain_lighting"].HasNormalTick = false;
+			PerfHistory.Items["shroud_tick"].HasNormalTick = false;
 
 			JoinLocal();
 
@@ -714,6 +715,7 @@ namespace OpenRA
 			PerfHistory.Items["render_widgets"].Tick();
 			PerfHistory.Items["render_flip"].Tick();
 			PerfHistory.Items["terrain_lighting"].Tick();
+			PerfHistory.Items["shroud_tick"].Tick();
 		}
 
 		static void Loop()

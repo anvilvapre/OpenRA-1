@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using OpenRA.Support;
 
 namespace OpenRA.Traits
 {
@@ -70,6 +71,7 @@ namespace OpenRA.Traits
 
 	public class Shroud : ISync, INotifyCreated, ITick
 	{
+		const int TouchBlockSize = 8;
 		public enum SourceType : byte { PassiveVisibility, Shroud, Visibility }
 		public event Action<PPos> OnShroudChanged;
 
@@ -98,8 +100,9 @@ namespace OpenRA.Traits
 		readonly ProjectedCellLayer<short> visibleCount;
 		readonly ProjectedCellLayer<short> generatedShroudCount;
 		readonly ProjectedCellLayer<bool> explored;
-		readonly ProjectedCellLayer<bool> touched;
+		readonly bool[] touched;
 		int touchedCount;
+		readonly int[] touchedIndexes;
 
 		// Per-cell cache of the resolved cell type (shroud/fog/visible)
 		readonly ProjectedCellLayer<ShroudCellType> resolvedType;
@@ -142,8 +145,9 @@ namespace OpenRA.Traits
 			visibleCount = new ProjectedCellLayer<short>(map);
 			generatedShroudCount = new ProjectedCellLayer<short>(map);
 			explored = new ProjectedCellLayer<bool>(map);
-			touched = new ProjectedCellLayer<bool>(map);
-			touchedCount = 1;
+			touched = new bool[explored.Size.Width * explored.Size.Height];
+			touchedCount = 0;
+			touchedIndexes = new int[touched.Length];
 
 			// Defaults to 0 = Shroud
 			resolvedType = new ProjectedCellLayer<ShroudCellType>(map);
@@ -163,42 +167,47 @@ namespace OpenRA.Traits
 		{
 			if (touchedCount == 0)
 				return;
-			touchedCount = 0;
 
 			if (OnShroudChanged == null)
-				return;
-
-			foreach (var puv in map.ProjectedCells)
 			{
-				var index = touched.Index(puv);
-				if (!touched[index])
-					continue;
-
-				touched[index] = false;
-
-				var type = ShroudCellType.Shroud;
-
-				if (explored[index])
-				{
-					var count = visibleCount[index];
-					if (!shroudGenerationEnabled || count > 0 || generatedShroudCount[index] == 0)
-					{
-						if (passiveVisibilityEnabled)
-							count += passiveVisibleCount[index];
-
-						type = count > 0 ? ShroudCellType.Visible : ShroudCellType.Fog;
-					}
-				}
-
-				var oldResolvedType = resolvedType[index];
-				if (type != oldResolvedType)
-				{
-					resolvedType[index] = type;
-					OnShroudChanged(puv);
-				}
+				touchedCount = 0;
+				return;
 			}
 
-			Hash = Sync.HashPlayer(self.Owner) + self.World.WorldTick;
+			using (new PerfSample("shroud_tick"))
+			{
+				for (var ci = 0; ci < touchedCount; ++ci)
+				{
+					var index = touchedIndexes[ci];
+
+					var type = ShroudCellType.Shroud;
+					if (explored[index])
+					{
+						var count = visibleCount[index];
+						if (!shroudGenerationEnabled || count > 0 || generatedShroudCount[index] == 0)
+						{
+							if (passiveVisibilityEnabled)
+								count += passiveVisibleCount[index];
+
+							type = count > 0 ? ShroudCellType.Visible : ShroudCellType.Fog;
+						}
+					}
+
+					var oldResolvedType = resolvedType[index];
+					if (type != oldResolvedType)
+					{
+						resolvedType[index] = type;
+						PPos puv = new PPos(index % explored.Size.Width,
+							index / explored.Size.Width);
+						OnShroudChanged(puv);
+					}
+
+					touched[index] = false;
+				}
+
+				Hash = Sync.HashPlayer(self.Owner) + self.World.WorldTick;
+				touchedCount = 0;
+			}
 		}
 
 		public static IEnumerable<PPos> ProjectedCellsInRange(Map map, WPos pos, WDist minRange, WDist maxRange, int maxHeightDelta = -1)
@@ -243,9 +252,8 @@ namespace OpenRA.Traits
 				if (!map.Contains(puv))
 					continue;
 
-				var index = touched.Index(puv);
-				touched[index] = true;
-				touchedCount++;
+				var index = explored.Index(puv);
+				SetTouched(index);
 				switch (type)
 				{
 					case SourceType.PassiveVisibility:
@@ -275,9 +283,8 @@ namespace OpenRA.Traits
 				// Cells outside the visible bounds don't increment visibleCount
 				if (map.Contains(puv))
 				{
-					var index = touched.Index(puv);
-					touched[index] = true;
-					touchedCount++;
+					var index = explored.Index(puv);
+					SetTouched(index);
 					switch (state.Type)
 					{
 						case SourceType.PassiveVisibility:
@@ -302,11 +309,10 @@ namespace OpenRA.Traits
 			{
 				if (map.Contains(puv))
 				{
-					var index = touched.Index(puv);
+					var index = explored.Index(puv);
 					if (!explored[index])
 					{
-						touched[index] = true;
-						touchedCount++;
+						SetTouched(index);
 						explored[index] = true;
 					}
 				}
@@ -320,11 +326,10 @@ namespace OpenRA.Traits
 
 			foreach (var puv in map.ProjectedCells)
 			{
-				var index = touched.Index(puv);
+				var index = explored.Index(puv);
 				if (!explored[index] && s.explored[index])
 				{
-					touched[index] = true;
-					touchedCount++;
+					SetTouched(index);
 					explored[index] = true;
 				}
 			}
@@ -334,11 +339,10 @@ namespace OpenRA.Traits
 		{
 			foreach (var puv in map.ProjectedCells)
 			{
-				var index = touched.Index(puv);
+				var index = explored.Index(puv);
 				if (!explored[index])
 				{
-					touched[index] = true;
-					touchedCount++;
+					SetTouched(index);
 					explored[index] = true;
 				}
 			}
@@ -348,9 +352,8 @@ namespace OpenRA.Traits
 		{
 			foreach (var puv in map.ProjectedCells)
 			{
-				var index = touched.Index(puv);
-				touched[index] = true;
-				touchedCount++;
+				var index = explored.Index(puv);
+				SetTouched(index);
 				explored[index] = (visibleCount[index] + passiveVisibleCount[index]) > 0;
 			}
 		}
@@ -418,6 +421,15 @@ namespace OpenRA.Traits
 			// Check that uv is inside the map area. There is nothing special
 			// about explored here: any of the CellLayers would have been suitable.
 			return explored.Contains(uv);
+		}
+
+		void SetTouched(int projIndex)
+		{
+			if (!touched[projIndex])
+			{
+				touched[projIndex] = true;
+				touchedIndexes[touchedCount++] = projIndex;
+			}
 		}
 	}
 }
