@@ -44,7 +44,7 @@ namespace OpenRA
 		}
 
 		/// <summary>Clears the layer contents with a known value</summary>
-		public void Clear(T clearValue)
+		public virtual void Clear(T clearValue)
 		{
 			for (var i = 0; i < entries.Length; i++)
 				entries[i] = clearValue;

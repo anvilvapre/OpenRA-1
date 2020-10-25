@@ -98,7 +98,7 @@ namespace OpenRA.Traits
 		readonly ProjectedCellLayer<short> visibleCount;
 		readonly ProjectedCellLayer<short> generatedShroudCount;
 		readonly ProjectedCellLayer<bool> explored;
-		readonly ProjectedCellLayer<bool> touched;
+		readonly ProjectedCellTouchStateLayer touched;
 
 		// Per-cell cache of the resolved cell type (shroud/fog/visible)
 		readonly ProjectedCellLayer<ShroudCellType> resolvedType;
@@ -141,7 +141,7 @@ namespace OpenRA.Traits
 			visibleCount = new ProjectedCellLayer<short>(map);
 			generatedShroudCount = new ProjectedCellLayer<short>(map);
 			explored = new ProjectedCellLayer<bool>(map);
-			touched = new ProjectedCellLayer<bool>(map);
+			touched = new ProjectedCellTouchStateLayer(map);
 
 			// Defaults to 0 = Shroud
 			resolvedType = new ProjectedCellLayer<ShroudCellType>(map);
@@ -155,6 +155,7 @@ namespace OpenRA.Traits
 			ExploreMapEnabled = gs.OptionOrDefault("explored", info.ExploredMapCheckboxEnabled);
 			if (ExploreMapEnabled)
 				self.World.AddFrameEndTask(w => ExploreAll());
+			touched.Clear();
 		}
 
 		void ITick.Tick(Actor self)
@@ -162,13 +163,8 @@ namespace OpenRA.Traits
 			if (OnShroudChanged == null)
 				return;
 
-			foreach (var puv in map.ProjectedCells)
+			touched.ApplyToMarked((puv) =>
 			{
-				if (!touched[puv])
-					continue;
-
-				touched[puv] = false;
-
 				var type = ShroudCellType.Shroud;
 
 				if (explored[puv] && (!shroudGenerationEnabled || generatedShroudCount[puv] == 0 || visibleCount[puv] > 0))
@@ -184,7 +180,7 @@ namespace OpenRA.Traits
 				resolvedType[puv] = type;
 				if (type != oldResolvedType)
 					OnShroudChanged(puv);
-			}
+			});
 
 			Hash = Sync.HashPlayer(self.Owner) + self.World.WorldTick;
 		}
@@ -231,7 +227,7 @@ namespace OpenRA.Traits
 				if (!map.Contains(puv))
 					continue;
 
-				touched[puv] = true;
+				touched.Mark(puv);
 				switch (type)
 				{
 					case SourceType.PassiveVisibility:
@@ -261,7 +257,7 @@ namespace OpenRA.Traits
 				// Cells outside the visible bounds don't increment visibleCount
 				if (map.Contains(puv))
 				{
-					touched[puv] = true;
+					touched.Mark(puv);
 					switch (state.Type)
 					{
 						case SourceType.PassiveVisibility:
@@ -286,7 +282,7 @@ namespace OpenRA.Traits
 			{
 				if (map.Contains(puv) && !explored[puv])
 				{
-					touched[puv] = true;
+					touched.Mark(puv);
 					explored[puv] = true;
 				}
 			}
@@ -301,7 +297,7 @@ namespace OpenRA.Traits
 			{
 				if (!explored[puv] && s.explored[puv])
 				{
-					touched[puv] = true;
+					touched.Mark(puv);
 					explored[puv] = true;
 				}
 			}
@@ -313,7 +309,7 @@ namespace OpenRA.Traits
 			{
 				if (!explored[puv])
 				{
-					touched[puv] = true;
+					touched.Mark(puv);
 					explored[puv] = true;
 				}
 			}
@@ -323,7 +319,7 @@ namespace OpenRA.Traits
 		{
 			foreach (var puv in map.ProjectedCells)
 			{
-				touched[puv] = true;
+				touched.Mark(puv);
 				explored[puv] = (visibleCount[puv] + passiveVisibleCount[puv]) > 0;
 			}
 		}
