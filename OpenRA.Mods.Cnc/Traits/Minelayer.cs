@@ -57,6 +57,13 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	public class Minelayer : IIssueOrder, IResolveOrder, ISync, IIssueDeployOrder, IOrderVoice, ITick
 	{
+		public static class OrderID
+		{
+			public const string BeginMinefield = "BeginMinefield";
+			public const string PlaceMinefield = "PlaceMinefield";
+			public const string PlaceMine = "PlaceMine";
+		}
+
 		public readonly MinelayerInfo Info;
 		public readonly Sprite Tile;
 
@@ -82,7 +89,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			get
 			{
 				yield return new BeginMinefieldOrderTargeter();
-				yield return new DeployOrderTargeter("PlaceMine", 5, () => IsCellAcceptable(self, self.Location) ? Info.DeployCursor : Info.DeployBlockedCursor);
+				yield return new DeployOrderTargeter(Minelayer.OrderID.PlaceMine, 5, () => IsCellAcceptable(self, self.Location) ? Info.DeployCursor : Info.DeployBlockedCursor);
 			}
 		}
 
@@ -90,16 +97,16 @@ namespace OpenRA.Mods.Cnc.Traits
 		{
 			switch (order.OrderID)
 			{
-				case "BeginMinefield":
+				case OrderID.BeginMinefield:
 					var start = self.World.Map.CellContaining(target.CenterPosition);
 					if (self.World.OrderGenerator is MinefieldOrderGenerator)
 						((MinefieldOrderGenerator)self.World.OrderGenerator).AddMinelayer(self, start);
 					else
 						self.World.OrderGenerator = new MinefieldOrderGenerator(self, start, queued);
 
-					return new Order("BeginMinefield", self, Target.FromCell(self.World, start), queued);
-				case "PlaceMine":
-					return new Order("PlaceMine", self, Target.FromCell(self.World, self.Location), queued);
+					return new Order(OrderID.BeginMinefield, self, Target.FromCell(self.World, start), queued);
+				case OrderID.PlaceMine:
+					return new Order(OrderID.PlaceMine, self, Target.FromCell(self.World, self.Location), queued);
 				default:
 					return null;
 			}
@@ -107,7 +114,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("PlaceMine", self, Target.FromCell(self.World, self.Location), queued);
+			return new Order(OrderID.PlaceMine, self, Target.FromCell(self.World, self.Location), queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued)
@@ -115,20 +122,22 @@ namespace OpenRA.Mods.Cnc.Traits
 			return IsCellAcceptable(self, self.Location);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.BeginMinefield, OrderID.PlaceMinefield, OrderID.PlaceMine };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "BeginMinefield" && order.OrderString != "PlaceMinefield" && order.OrderString != "PlaceMine")
-				return;
-
 			var cell = self.World.Map.CellContaining(order.Target.CenterPosition);
-			if (order.OrderString == "BeginMinefield")
+			if (order.OrderString == OrderID.BeginMinefield)
 				minefieldStart = cell;
-			else if (order.OrderString == "PlaceMine")
+			else if (order.OrderString == OrderID.PlaceMine)
 			{
 				if (IsCellAcceptable(self, cell))
 					self.QueueActivity(order.Queued, new LayMines(self));
 			}
-			else if (order.OrderString == "PlaceMinefield")
+			else if (order.OrderString == OrderID.PlaceMinefield)
 			{
 				// A different minelayer might have started laying the field without this minelayer knowing the start
 				minefieldStart = order.ExtraLocation;
@@ -155,7 +164,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "PlaceMine" || order.OrderString == "PlaceMinefield")
+			if (order.OrderString == OrderID.PlaceMine || order.OrderString == OrderID.PlaceMinefield)
 				return Info.Voice;
 
 			return null;
@@ -243,7 +252,7 @@ namespace OpenRA.Mods.Cnc.Traits
 				{
 					minelayers.First().World.CancelInputMode();
 					foreach (var minelayer in minelayers)
-						yield return new Order("PlaceMinefield", minelayer, Target.FromCell(world, cell), queued) { ExtraLocation = minefieldStart };
+						yield return new Order(Minelayer.OrderID.PlaceMinefield, minelayer, Target.FromCell(world, cell), queued) { ExtraLocation = minefieldStart };
 				}
 			}
 
@@ -297,7 +306,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		class BeginMinefieldOrderTargeter : IOrderTargeter
 		{
-			public string OrderID { get { return "BeginMinefield"; } }
+			public string OrderID { get { return Minelayer.OrderID.BeginMinefield; } }
 			public int OrderPriority { get { return 5; } }
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers) { return true; }
 

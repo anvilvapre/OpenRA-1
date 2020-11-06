@@ -56,6 +56,12 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TransformsIntoMobile : ConditionalTrait<TransformsIntoMobileInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		static class OrderID
+		{
+			public const string Move = "Move";
+			public const string Stop = "Stop";
+		}
+
 		readonly Actor self;
 		Transforms[] transforms;
 		Locomotor locomotor;
@@ -92,12 +98,17 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Move, OrderID.Stop };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
 			if (IsTraitDisabled)
 				return;
 
-			if (order.OrderString == "Move")
+			if (order.OrderString == OrderID.Move)
 			{
 				var cell = self.World.Map.Clamp(this.self.World.Map.CellContaining(order.Target.CenterPosition));
 				if (!Info.LocomotorInfo.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
@@ -120,7 +131,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				self.ShowTargetLines();
 			}
-			else if (order.OrderString == "Stop")
+			else if (order.OrderString == OrderID.Stop)
 			{
 				// We don't want Stop orders from traits other than Mobile or Aircraft to cancel Resupply activity.
 				// Resupply is always either the main activity or a child of ReturnToBase.
@@ -139,7 +150,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			switch (order.OrderString)
 			{
-				case "Move":
+				case OrderID.Move:
 					if (!Info.LocomotorInfo.MoveIntoShroud && order.Target.Type != TargetType.Invalid)
 					{
 						var cell = self.World.Map.CellContaining(order.Target.CenterPosition);
@@ -148,7 +159,7 @@ namespace OpenRA.Mods.Common.Traits
 					}
 
 					return Info.Voice;
-				case "Stop":
+				case OrderID.Stop:
 					return Info.Voice;
 				default:
 					return null;
@@ -171,10 +182,10 @@ namespace OpenRA.Mods.Common.Traits
 			public MoveOrderTargeter(Actor self, TransformsIntoMobile mobile)
 			{
 				this.mobile = mobile;
-				rejectMove = !self.AcceptsOrder("Move");
+				rejectMove = !self.AcceptsOrder(TransformsIntoMobile.OrderID.Move);
 			}
 
-			public string OrderID { get { return "Move"; } }
+			public string OrderID { get { return TransformsIntoMobile.OrderID.Move; } }
 			public int OrderPriority { get { return 4; } }
 			public bool IsQueued { get; protected set; }
 

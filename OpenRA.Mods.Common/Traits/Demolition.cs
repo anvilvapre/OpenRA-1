@@ -55,6 +55,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	class Demolition : IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string C4 = "C4";
+		}
+
 		readonly DemolitionInfo info;
 
 		public Demolition(DemolitionInfo info)
@@ -69,15 +74,20 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "C4")
+			if (order.OrderID != OrderID.C4)
 				return null;
 
 			return new Order(order.OrderID, self, target, queued);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.C4 };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "C4")
+			if (order.OrderString != OrderID.C4)
 				return;
 
 			if (order.Target.Type == TargetType.Actor)
@@ -95,7 +105,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "C4" ? info.Voice : null;
+			return order.OrderString == OrderID.C4 ? info.Voice : null;
 		}
 
 		class DemolitionOrderTargeter : UnitOrderTargeter
@@ -103,7 +113,7 @@ namespace OpenRA.Mods.Common.Traits
 			readonly DemolitionInfo info;
 
 			public DemolitionOrderTargeter(DemolitionInfo info)
-				: base("C4", 6, info.Cursor, true, true)
+				: base(Demolition.OrderID.C4, 6, info.Cursor, true, true)
 			{
 				this.info = info;
 			}

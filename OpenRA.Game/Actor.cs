@@ -102,7 +102,7 @@ namespace OpenRA
 
 		readonly IFacing facing;
 		readonly IHealth health;
-		readonly IResolveOrder[] resolveOrders;
+		readonly Dictionary<string, IResolveOrder[]> resolveOrders;
 		readonly IRenderModifier[] renderModifiers;
 		readonly IRender[] renders;
 		readonly IMouseBounds[] mouseBounds;
@@ -182,7 +182,17 @@ namespace OpenRA
 					{ if (trait is ISync t) syncHashesList.Add(new SyncHash(t)); }
 				}
 
-				resolveOrders = resolveOrdersList.ToArray();
+				var resolveOrdersTemp = new Dictionary<string, IList<IResolveOrder>>();
+				foreach (var resolveOrder in resolveOrdersList)
+					foreach (var orderID in resolveOrder.GetResolvableOrders(this))
+						resolveOrdersTemp.GetOrAdd(orderID,
+							_ => new List<IResolveOrder>(
+								resolveOrdersList.Count)).Add(resolveOrder);
+				resolveOrders = new Dictionary<string, IResolveOrder[]>(resolveOrdersTemp.Count);
+				foreach (var item in resolveOrdersTemp)
+					resolveOrders.Add(item.Key, item.Value.ToArray());
+				resolveOrdersTemp = null;
+
 				renderModifiers = renderModifiersList.ToArray();
 				renders = rendersList.ToArray();
 				mouseBounds = mouseBoundsList.ToArray();
@@ -432,8 +442,13 @@ namespace OpenRA
 
 		public void ResolveOrder(Order order)
 		{
-			foreach (var r in resolveOrders)
-				r.ResolveOrder(this, order);
+			if (resolveOrders.TryGetValue("", out var receiveAnyOrderList))
+				foreach (var r in receiveAnyOrderList)
+					r.ResolveOrder(this, order);
+
+			if (resolveOrders.TryGetValue(order.OrderString, out var roList))
+				foreach (var r in roList)
+					r.ResolveOrder(this, order);
 		}
 
 		// TODO: move elsewhere.

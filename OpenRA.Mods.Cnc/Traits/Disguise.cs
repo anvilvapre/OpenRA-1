@@ -106,6 +106,11 @@ namespace OpenRA.Mods.Cnc.Traits
 	class Disguise : IEffectiveOwner, IIssueOrder, IResolveOrder, IOrderVoice, IRadarColorModifier, INotifyAttack,
 		INotifyDamage, INotifyUnload, INotifyDemolition, INotifyInfiltration, ITick
 	{
+		public static class OrderID
+		{
+			public const string Disguise = "Disguise";
+		}
+
 		public ActorInfo AsActor { get; private set; }
 		public Player AsPlayer { get; private set; }
 		public ITooltipInfo AsTooltipInfo { get; private set; }
@@ -138,28 +143,30 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "Disguise")
+			if (order.OrderID == OrderID.Disguise)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Disguise };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Disguise")
-			{
-				var target = order.Target;
-				if (target.Type == TargetType.Actor)
-					DisguiseAs((target.Actor != self && target.Actor.IsInWorld) ? target.Actor : null);
+			var target = order.Target;
+			if (target.Type == TargetType.Actor)
+				DisguiseAs((target.Actor != self && target.Actor.IsInWorld) ? target.Actor : null);
 
-				if (target.Type == TargetType.FrozenActor)
-					DisguiseAs(target.FrozenActor.Info, target.FrozenActor.Owner);
-			}
+			if (target.Type == TargetType.FrozenActor)
+				DisguiseAs(target.FrozenActor.Info, target.FrozenActor.Owner);
 		}
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "Disguise" ? info.Voice : null;
+			return order.OrderString == OrderID.Disguise ? info.Voice : null;
 		}
 
 		Color IRadarColorModifier.RadarColorOverride(Actor self, Color color)
@@ -290,7 +297,7 @@ namespace OpenRA.Mods.Cnc.Traits
 		readonly DisguiseInfo info;
 
 		public DisguiseOrderTargeter(DisguiseInfo info)
-			: base("Disguise", 7, info.Cursor, true, true)
+			: base(Disguise.OrderID.Disguise, 7, info.Cursor, true, true)
 		{
 			this.info = info;
 			ForceAttack = false;

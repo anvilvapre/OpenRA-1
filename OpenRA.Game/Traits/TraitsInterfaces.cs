@@ -152,7 +152,12 @@ namespace OpenRA.Traits
 		bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers);
 	}
 
-	public interface IResolveOrder { void ResolveOrder(Actor self, Order order); }
+	public interface IResolveOrder
+	{
+		IEnumerable<string> GetResolvableOrders(Actor self);
+		void ResolveOrder(Actor self, Order order);
+	}
+
 	public interface IValidateOrder { bool OrderValidation(OrderManager orderManager, World world, int clientId, Order order); }
 	public interface IOrderVoice { string VoicePhraseForOrder(Actor self, Order order); }
 

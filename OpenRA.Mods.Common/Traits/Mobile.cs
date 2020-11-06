@@ -143,6 +143,13 @@ namespace OpenRA.Mods.Common.Traits
 	public class Mobile : PausableConditionalTrait<MobileInfo>, IIssueOrder, IResolveOrder, IOrderVoice, IPositionable, IMove, ITick, ICreationActivity,
 		IFacing, IDeathActorInitModifier, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyBlockingMove, IActorPreviewInitModifier, INotifyBecomingIdle
 	{
+		public static class OrderID
+		{
+			public const string Move = "Move";
+			public const string Stop = "Stop";
+			public const string Scatter = "Scatter";
+		}
+
 		readonly Actor self;
 		readonly Lazy<IEnumerable<int>> speedModifiers;
 
@@ -907,9 +914,14 @@ namespace OpenRA.Mods.Common.Traits
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
 			if (order is MoveOrderTargeter)
-				return new Order("Move", self, target, queued);
+				return new Order(OrderID.Move, self, target, queued);
 
 			return null;
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Move, OrderID.Stop, OrderID.Scatter };
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
@@ -917,7 +929,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (IsTraitDisabled)
 				return;
 
-			if (order.OrderString == "Move")
+			if (order.OrderString == OrderID.Move)
 			{
 				var cell = self.World.Map.Clamp(this.self.World.Map.CellContaining(order.Target.CenterPosition));
 				if (!Info.LocomotorInfo.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
@@ -928,9 +940,9 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// TODO: This should only cancel activities queued by this trait
-			else if (order.OrderString == "Stop")
+			else if (order.OrderString == OrderID.Stop)
 				self.CancelActivity();
-			else if (order.OrderString == "Scatter")
+			else if (order.OrderString == OrderID.Scatter)
 				Nudge(self);
 		}
 
@@ -941,7 +953,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			switch (order.OrderString)
 			{
-				case "Move":
+				case OrderID.Move:
 					if (!Info.LocomotorInfo.MoveIntoShroud && order.Target.Type != TargetType.Invalid)
 					{
 						var cell = self.World.Map.CellContaining(order.Target.CenterPosition);
@@ -950,8 +962,8 @@ namespace OpenRA.Mods.Common.Traits
 					}
 
 					return Info.Voice;
-				case "Scatter":
-				case "Stop":
+				case OrderID.Scatter:
+				case OrderID.Stop:
 					return Info.Voice;
 				default:
 					return null;
@@ -981,10 +993,10 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				mobile = unit;
 				locomotorInfo = mobile.Info.LocomotorInfo;
-				rejectMove = !self.AcceptsOrder("Move");
+				rejectMove = !self.AcceptsOrder(Mobile.OrderID.Move);
 			}
 
-			public string OrderID { get { return "Move"; } }
+			public string OrderID { get { return Mobile.OrderID.Move; } }
 			public int OrderPriority { get { return 4; } }
 			public bool IsQueued { get; protected set; }
 

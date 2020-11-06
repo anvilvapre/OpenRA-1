@@ -125,19 +125,21 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { "DevLevelUp" };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "DevLevelUp")
-			{
-				var developerMode = self.Owner.PlayerActor.Trait<DeveloperMode>();
-				if (!developerMode.Enabled)
-					return;
+			var developerMode = self.Owner.PlayerActor.Trait<DeveloperMode>();
+			if (!developerMode.Enabled)
+				return;
 
-				if ((int)order.ExtraData > 0)
-					GiveLevels((int)order.ExtraData);
-				else
-					GiveLevels(1);
-			}
+			if ((int)order.ExtraData > 0)
+				GiveLevels((int)order.ExtraData);
+			else
+				GiveLevels(1);
 		}
 
 		void ITransformActorInitModifier.ModifyTransformActorInit(Actor self, TypeDictionary init)

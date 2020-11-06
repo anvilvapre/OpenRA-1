@@ -57,6 +57,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Passenger : IIssueOrder, IResolveOrder, IOrderVoice, INotifyRemovedFromWorld, INotifyEnteredCargo, INotifyExitedCargo, INotifyKilled, IObservesVariables
 	{
+		public static class OrderID
+		{
+			public const string EnterTransport = "EnterTransport";
+		}
+
 		public readonly PassengerInfo Info;
 		public Actor Transport;
 		bool requireForceMove;
@@ -76,7 +81,7 @@ namespace OpenRA.Mods.Common.Traits
 			get
 			{
 				yield return new EnterAlliedActorTargeter<CargoInfo>(
-					"EnterTransport",
+					OrderID.EnterTransport,
 					5,
 					Info.EnterCursor,
 					Info.EnterBlockedCursor,
@@ -87,7 +92,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "EnterTransport")
+			if (order.OrderID == OrderID.EnterTransport)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -119,7 +124,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "EnterTransport")
+			if (order.OrderString != OrderID.EnterTransport)
 				return null;
 
 			if (order.Target.Type != TargetType.Actor || !CanEnter(order.Target.Actor))
@@ -156,11 +161,13 @@ namespace OpenRA.Mods.Common.Traits
 				specificCargoToken = self.RevokeCondition(specificCargoToken);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.EnterTransport };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "EnterTransport")
-				return;
-
 			// Enter orders are only valid for own/allied actors,
 			// which are guaranteed to never be frozen.
 			if (order.Target.Type != TargetType.Actor)

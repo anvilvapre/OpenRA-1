@@ -36,6 +36,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	class DeliversExperience : IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string DeliverExperience = "DeliverExperience";
+		}
+
 		readonly DeliversExperienceInfo info;
 		readonly Actor self;
 		readonly GainsExperience gainsExperience;
@@ -58,7 +63,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "DeliverExperience")
+			if (order.OrderID != OrderID.DeliverExperience)
 				return null;
 
 			return new Order(order.OrderID, self, target, queued);
@@ -66,17 +71,19 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "DeliverExperience")
+			if (order.OrderString != OrderID.DeliverExperience)
 				return null;
 
 			return info.Voice;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.DeliverExperience };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "DeliverExperience")
-				return;
-
 			if (order.Target.Type == TargetType.Actor)
 			{
 				var targetGainsExperience = order.Target.Actor.Trait<GainsExperience>();
@@ -93,7 +100,7 @@ namespace OpenRA.Mods.Common.Traits
 		public class DeliversExperienceOrderTargeter : UnitOrderTargeter
 		{
 			public DeliversExperienceOrderTargeter(DeliversExperienceInfo info)
-				: base("DeliverExperience", 5, info.Cursor, true, true) { }
+				: base(DeliversExperience.OrderID.DeliverExperience, 5, info.Cursor, true, true) { }
 
 			public override bool CanTargetActor(Actor self, Actor target, TargetModifiers modifiers, ref string cursor)
 			{

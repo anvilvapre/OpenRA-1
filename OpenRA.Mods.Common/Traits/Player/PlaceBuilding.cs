@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -39,6 +40,13 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class PlaceBuilding : IResolveOrder, ITick
 	{
+		static class OrderID
+		{
+			public const string PlaceBuilding = "PlaceBuilding";
+			public const string LineBuild = "LineBuild";
+			public const string PlacePlug = "PlacePlug";
+		}
+
 		readonly PlaceBuildingInfo info;
 		bool triggerNotification;
 		int tick;
@@ -48,14 +56,13 @@ namespace OpenRA.Mods.Common.Traits
 			this.info = info;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.PlaceBuilding, OrderID.LineBuild, OrderID.PlacePlug };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			var os = order.OrderString;
-			if (os != "PlaceBuilding" &&
-				os != "LineBuild" &&
-				os != "PlacePlug")
-				return;
-
 			self.World.AddFrameEndTask(w =>
 			{
 				var prevItems = GetNumBuildables(self.Owner);
@@ -98,7 +105,8 @@ namespace OpenRA.Mods.Common.Traits
 				if (buildableInfo != null && buildableInfo.ForceFaction != null)
 					faction = buildableInfo.ForceFaction;
 
-				if (os == "LineBuild")
+				var os = order.OrderString;
+				if (os == OrderID.LineBuild)
 				{
 					// Build the parent actor first
 					var placed = w.CreateActor(actorInfo.Name, new TypeDictionary
@@ -133,7 +141,7 @@ namespace OpenRA.Mods.Common.Traits
 						});
 					}
 				}
-				else if (os == "PlacePlug")
+				else if (os == OrderID.PlacePlug)
 				{
 					var plugInfo = actorInfo.TraitInfoOrDefault<PlugInfo>();
 					if (plugInfo == null)

@@ -66,6 +66,13 @@ namespace OpenRA.Mods.Common.Traits
 	public class Carryall : INotifyKilled, ISync, ITick, IRender, INotifyActorDisposing, IIssueOrder, IResolveOrder,
 		IOrderVoice, IIssueDeployOrder, IAircraftCenterPositionOffset, IOverrideAircraftLanding
 	{
+		static class OrderID
+		{
+			public const string DeliverUnit = "DeliverUnit";
+			public const string Unload = "Unload";
+			public const string PickupUnit = "PickupUnit";
+		}
+
 		public enum CarryallState
 		{
 			Idle,
@@ -287,7 +294,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "PickupUnit" || order.OrderID == "DeliverUnit" || order.OrderID == "Unload")
+			if (order.OrderID == OrderID.PickupUnit
+				|| order.OrderID == OrderID.DeliverUnit || order.OrderID == OrderID.Unload)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -295,14 +303,19 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("Unload", self, queued);
+			return new Order(OrderID.Unload, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued) { return true; }
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.DeliverUnit, OrderID.Unload, OrderID.PickupUnit };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "DeliverUnit")
+			if (order.OrderString == OrderID.DeliverUnit)
 			{
 				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
 				if (!aircraftInfo.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
@@ -312,14 +325,14 @@ namespace OpenRA.Mods.Common.Traits
 				self.QueueActivity(order.Queued, new DeliverUnit(self, order.Target, Info.DropRange));
 				self.ShowTargetLines();
 			}
-			else if (order.OrderString == "Unload")
+			else if (order.OrderString == OrderID.Unload)
 			{
 				if (!order.Queued && !CanUnload())
 					return;
 
 				self.QueueActivity(order.Queued, new DeliverUnit(self, Info.DropRange));
 			}
-			else if (order.OrderString == "PickupUnit")
+			else if (order.OrderString == OrderID.PickupUnit)
 			{
 				if (order.Target.Type != TargetType.Actor)
 					return;
@@ -333,9 +346,9 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			switch (order.OrderString)
 			{
-				case "DeliverUnit":
-				case "Unload":
-				case "PickupUnit":
+				case OrderID.DeliverUnit:
+				case OrderID.Unload:
+				case OrderID.PickupUnit:
 					return Info.Voice;
 				default:
 					return null;
@@ -345,7 +358,7 @@ namespace OpenRA.Mods.Common.Traits
 		class CarryallPickupOrderTargeter : UnitOrderTargeter
 		{
 			public CarryallPickupOrderTargeter(CarryallInfo info)
-				: base("PickupUnit", 5, info.PickUpCursor, false, true)
+				: base(Carryall.OrderID.PickupUnit, 5, info.PickUpCursor, false, true)
 			{
 			}
 
@@ -380,7 +393,7 @@ namespace OpenRA.Mods.Common.Traits
 			readonly AircraftInfo aircraftInfo;
 			readonly CarryallInfo info;
 
-			public string OrderID { get { return "DeliverUnit"; } }
+			public string OrderID { get { return Carryall.OrderID.DeliverUnit; } }
 			public int OrderPriority { get { return 6; } }
 			public bool IsQueued { get; protected set; }
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers) { return true; }

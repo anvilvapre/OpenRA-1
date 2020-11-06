@@ -37,6 +37,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TransformsIntoEntersTunnels : ConditionalTrait<TransformsIntoEntersTunnelsInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string EnterTunnel = "EnterTunnel";
+		}
+
 		readonly Actor self;
 		Transforms[] transforms;
 
@@ -73,15 +78,20 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "EnterTunnel")
+			if (order.OrderID == OrderID.EnterTunnel)
 				return new Order(order.OrderID, self, target, queued) { SuppressVisualFeedback = true };
 
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.EnterTunnel };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (IsTraitDisabled || order.OrderString != "EnterTunnel" || order.Target.Type != TargetType.Actor)
+			if (IsTraitDisabled || order.Target.Type != TargetType.Actor)
 				return;
 
 			var tunnel = order.Target.Actor.TraitOrDefault<TunnelEntrance>();
@@ -108,7 +118,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "EnterTunnel" ? Info.Voice : null;
+			return order.OrderString == OrderID.EnterTunnel ? Info.Voice : null;
 		}
 	}
 }

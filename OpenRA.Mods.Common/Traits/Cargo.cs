@@ -90,6 +90,11 @@ namespace OpenRA.Mods.Common.Traits
 		INotifyOwnerChanged, INotifySold, INotifyActorDisposing, IIssueDeployOrder,
 		ITransformActorInitModifier
 	{
+		static class OrderID
+		{
+			public const string Unload = "Unload";
+		}
+
 		public readonly CargoInfo Info;
 		readonly Actor self;
 		readonly List<Actor> cargo = new List<Actor>();
@@ -203,14 +208,14 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			get
 			{
-				yield return new DeployOrderTargeter("Unload", 10,
+				yield return new DeployOrderTargeter(OrderID.Unload, 10,
 					() => CanUnload() ? Info.UnloadCursor : Info.UnloadBlockedCursor);
 			}
 		}
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "Unload")
+			if (order.OrderID == OrderID.Unload)
 				return new Order(order.OrderID, self, queued);
 
 			return null;
@@ -218,20 +223,22 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("Unload", self, queued);
+			return new Order(OrderID.Unload, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued) { return true; }
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Unload };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Unload")
-			{
-				if (!order.Queued && !CanUnload())
-					return;
+			if (!order.Queued && !CanUnload())
+				return;
 
-				self.QueueActivity(order.Queued, new UnloadCargo(self, Info.LoadRange));
-			}
+			self.QueueActivity(order.Queued, new UnloadCargo(self, Info.LoadRange));
 		}
 
 		public bool CanUnload(BlockedByActor check = BlockedByActor.None)
@@ -321,7 +328,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "Unload" || IsEmpty(self) || !self.HasVoice(Info.UnloadVoice))
+			if (order.OrderString != OrderID.Unload || IsEmpty(self) || !self.HasVoice(Info.UnloadVoice))
 				return null;
 
 			return Info.UnloadVoice;

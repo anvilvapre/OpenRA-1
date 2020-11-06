@@ -46,6 +46,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Repairable : IIssueOrder, IResolveOrder, IOrderVoice, INotifyCreated, IObservesVariables
 	{
+		static class OrderID
+		{
+			public const string Repair = "Repair";
+		}
+
 		public readonly RepairableInfo Info;
 		readonly IHealth health;
 		Rearmable rearmable;
@@ -70,7 +75,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				if (!isAircraft)
 					yield return new EnterAlliedActorTargeter<BuildingInfo>(
-						"Repair",
+						OrderID.Repair,
 						5,
 						Info.EnterCursor,
 						Info.EnterBlockedCursor,
@@ -81,7 +86,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "Repair")
+			if (order.OrderID == OrderID.Repair)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -112,14 +117,16 @@ namespace OpenRA.Mods.Common.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "Repair" && (CanRepair() || CanRearm()) ? Info.Voice : null;
+			return order.OrderString == OrderID.Repair && (CanRepair() || CanRearm()) ? Info.Voice : null;
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Repair };
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "Repair")
-				return;
-
 			// Repair orders are only valid for own/allied actors,
 			// which are guaranteed to never be frozen.
 			if (order.Target.Type != TargetType.Actor)

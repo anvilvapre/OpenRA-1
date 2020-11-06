@@ -41,6 +41,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TransformsIntoPassenger : ConditionalTrait<TransformsIntoPassengerInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		static class OrderID
+		{
+			public const string EnterTransport = "EnterTransport";
+		}
+
 		readonly Actor self;
 		Transforms[] transforms;
 
@@ -62,7 +67,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				if (!IsTraitDisabled)
 					yield return new EnterAlliedActorTargeter<CargoInfo>(
-						"EnterTransport",
+						OrderID.EnterTransport,
 						5,
 						Info.EnterCursor,
 						Info.EnterBlockedCursor,
@@ -102,12 +107,14 @@ namespace OpenRA.Mods.Common.Traits
 			return cargo != null && cargo.HasSpace(Info.Weight);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.EnterTransport };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
 			if (IsTraitDisabled)
-				return;
-
-			if (order.OrderString != "EnterTransport")
 				return;
 
 			// Enter orders are only valid for own/allied actors,
@@ -145,7 +152,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (IsTraitDisabled)
 				return null;
 
-			if (order.OrderString != "EnterTransport")
+			if (order.OrderString != OrderID.EnterTransport)
 				return null;
 
 			if (order.Target.Type != TargetType.Actor || !CanEnter(order.Target.Actor))

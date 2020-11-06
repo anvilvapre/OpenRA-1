@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -73,6 +74,12 @@ namespace OpenRA.Mods.Common.Traits
 				if (Info.DisabledSpeech != null)
 					Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", Info.DisabledSpeech, self.Owner.Faction.InternalName);
 			}
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			// Assumed to be initialized once
+			return new string[] { Info.OrderName };
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)

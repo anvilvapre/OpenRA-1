@@ -52,7 +52,10 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class RallyPoint : IIssueOrder, IResolveOrder, INotifyOwnerChanged, INotifyCreated
 	{
-		const string OrderID = "SetRallyPoint";
+		public static class OrderID
+		{
+			public const string SetRallyPoint = "SetRallyPoint";
+		}
 
 		public List<CPos> Path;
 
@@ -99,7 +102,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == OrderID)
+			if (order.OrderID == OrderID.SetRallyPoint)
 			{
 				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", Info.Notification, self.Owner.Faction.InternalName);
 
@@ -113,11 +116,13 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.SetRallyPoint };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != OrderID)
-				return;
-
 			if (!order.Queued)
 				Path.Clear();
 
@@ -126,7 +131,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public static bool IsForceSet(Order order)
 		{
-			return order.OrderString == OrderID && order.ExtraData == ForceSet;
+			return order.OrderString == OrderID.SetRallyPoint && order.ExtraData == ForceSet;
 		}
 
 		class RallyPointOrderTargeter : IOrderTargeter
@@ -138,7 +143,7 @@ namespace OpenRA.Mods.Common.Traits
 				this.cursor = cursor;
 			}
 
-			public string OrderID { get { return "SetRallyPoint"; } }
+			public string OrderID { get { return RallyPoint.OrderID.SetRallyPoint; } }
 			public int OrderPriority { get { return 0; } }
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers) { return true; }
 			public bool ForceSet { get; private set; }

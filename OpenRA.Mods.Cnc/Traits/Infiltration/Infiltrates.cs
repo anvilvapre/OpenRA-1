@@ -49,6 +49,11 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	public class Infiltrates : ConditionalTrait<InfiltratesInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		static class OrderID
+		{
+			public const string Infiltrate = "Infiltrate";
+		}
+
 		public Infiltrates(InfiltratesInfo info)
 			: base(info) { }
 
@@ -65,9 +70,8 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "Infiltrate")
+			if (order.OrderID != OrderID.Infiltrate)
 				return null;
-
 			return new Order(order.OrderID, self, target, queued);
 		}
 
@@ -88,7 +92,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "Infiltrate" && IsValidOrder(self, order)
+			return order.OrderString == OrderID.Infiltrate && IsValidOrder(self, order)
 				? Info.Voice : null;
 		}
 
@@ -107,9 +111,14 @@ namespace OpenRA.Mods.Cnc.Traits
 			}
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Infiltrate };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "Infiltrate" || !IsValidOrder(self, order) || IsTraitDisabled)
+			if (!IsValidOrder(self, order) || IsTraitDisabled)
 				return;
 
 			if (!CanInfiltrateTarget(self, order.Target))

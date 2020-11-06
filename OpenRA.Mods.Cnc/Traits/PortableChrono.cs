@@ -118,9 +118,14 @@ namespace OpenRA.Mods.Cnc.Traits
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { "PortableChronoTeleport" };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "PortableChronoTeleport" && order.Target.Type != TargetType.Invalid)
+			if (order.Target.Type != TargetType.Invalid)
 			{
 				var maxDistance = Info.HasDistanceLimit ? Info.MaxDistance : (int?)null;
 				if (!order.Queued)

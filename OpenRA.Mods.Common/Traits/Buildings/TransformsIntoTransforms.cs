@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -26,12 +27,22 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TransformsIntoTransforms : ConditionalTrait<TransformsIntoTransformsInfo>, IResolveOrder, IOrderVoice, IIssueDeployOrder
 	{
+		static class OrderID
+		{
+			public const string AfterDeployTransform = "AfterDeployTransform";
+		}
+
 		public TransformsIntoTransforms(Actor self, TransformsIntoTransformsInfo info)
 			: base(info) { }
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.AfterDeployTransform };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (IsTraitDisabled || order.OrderString != "AfterDeployTransform")
+			if (IsTraitDisabled)
 				return;
 
 			// The DeployTransform order does not have a position associated with it,
@@ -56,7 +67,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("AfterDeployTransform", self, queued);
+			return new Order(OrderID.AfterDeployTransform, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued)

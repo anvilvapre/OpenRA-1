@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -18,9 +19,19 @@ namespace OpenRA.Mods.Common.Traits
 
 	class AllyRepair : IResolveOrder
 	{
+		public static class OrderID
+		{
+			public const string RepairBuilding = "RepairBuilding";
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.RepairBuilding };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "RepairBuilding" && order.Target.Type == TargetType.Actor)
+			if (order.Target.Type == TargetType.Actor)
 			{
 				var building = order.Target.Actor;
 				if (!building.AppearsFriendlyTo(self))

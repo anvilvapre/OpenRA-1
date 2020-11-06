@@ -67,8 +67,12 @@ namespace OpenRA.Mods.Common.Traits
 
 	public abstract class AttackBase : PausableConditionalTrait<AttackBaseInfo>, ITick, IIssueOrder, IResolveOrder, IOrderVoice, ISync
 	{
-		readonly string attackOrderName = "Attack";
-		readonly string forceAttackOrderName = "ForceAttack";
+		public static class OrderID
+		{
+			public const string Attack = "Attack";
+			public const string ForceAttack = "ForceAttack";
+			public const string Stop = "Stop";
+		}
 
 		[Sync]
 		public bool IsAiming { get; set; }
@@ -194,10 +198,15 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.ForceAttack, OrderID.Attack, OrderID.Stop };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			var forceAttack = order.OrderString == forceAttackOrderName;
-			if (forceAttack || order.OrderString == attackOrderName)
+			var forceAttack = order.OrderString == OrderID.ForceAttack;
+			if (forceAttack || order.OrderString == OrderID.Attack)
 			{
 				if (!order.Target.IsValidFor(self))
 					return;
@@ -205,7 +214,7 @@ namespace OpenRA.Mods.Common.Traits
 				AttackTarget(order.Target, AttackSource.Default, order.Queued, true, forceAttack, Info.TargetLineColor);
 				self.ShowTargetLines();
 			}
-			else if (order.OrderString == "Stop")
+			else if (order.OrderString == OrderID.Stop)
 				OnStopOrder(self);
 		}
 
@@ -223,7 +232,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == attackOrderName || order.OrderString == forceAttackOrderName ? Info.Voice : null;
+			return order.OrderString == OrderID.Attack || order.OrderString == OrderID.ForceAttack ? Info.Voice : null;
 		}
 
 		public abstract Activity GetAttackActivity(Actor self, AttackSource source, in Target newTarget, bool allowMove, bool forceAttack, Color? targetLineColor = null);
@@ -421,7 +430,7 @@ namespace OpenRA.Mods.Common.Traits
 			public AttackOrderTargeter(AttackBase ab, int priority)
 			{
 				this.ab = ab;
-				OrderID = ab.attackOrderName;
+				OrderID = AttackBase.OrderID.Attack;
 				OrderPriority = priority;
 			}
 
@@ -470,7 +479,7 @@ namespace OpenRA.Mods.Common.Traits
 				if (!forceAttack)
 					return true;
 
-				OrderID = ab.forceAttackOrderName;
+				OrderID = AttackBase.OrderID.ForceAttack;
 				return true;
 			}
 
@@ -501,7 +510,7 @@ namespace OpenRA.Mods.Common.Traits
 					? ab.Info.OutsideRangeCursor ?? a.Info.OutsideRangeCursor
 					: ab.Info.Cursor ?? a.Info.Cursor;
 
-				OrderID = ab.forceAttackOrderName;
+				OrderID = AttackBase.OrderID.ForceAttack;
 				return true;
 			}
 

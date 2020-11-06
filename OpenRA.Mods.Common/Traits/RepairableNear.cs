@@ -44,6 +44,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class RepairableNear : IIssueOrder, IResolveOrder, IOrderVoice, IObservesVariables
 	{
+		static class OrderID
+		{
+			public const string RepairNear = "RepairNear";
+		}
+
 		public readonly RepairableNearInfo Info;
 		readonly Actor self;
 		bool requireForceMove;
@@ -59,7 +64,7 @@ namespace OpenRA.Mods.Common.Traits
 			get
 			{
 				yield return new EnterAlliedActorTargeter<BuildingInfo>(
-					"RepairNear",
+					OrderID.RepairNear,
 					5,
 					Info.EnterCursor,
 					Info.EnterBlockedCursor,
@@ -70,7 +75,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "RepairNear")
+			if (order.OrderID == OrderID.RepairNear)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -96,14 +101,19 @@ namespace OpenRA.Mods.Common.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "RepairNear" && ShouldRepair() ? Info.Voice : null;
+			return order.OrderString == OrderID.RepairNear && ShouldRepair() ? Info.Voice : null;
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.RepairNear };
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
 			// RepairNear orders are only valid for own/allied actors,
 			// which are guaranteed to never be frozen.
-			if (order.OrderString != "RepairNear" || order.Target.Type != TargetType.Actor)
+			if (order.Target.Type != TargetType.Actor)
 				return;
 
 			if (!CanRepairAt(order.Target.Actor) || !ShouldRepair())

@@ -59,6 +59,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Transforms : PausableConditionalTrait<TransformsInfo>, IIssueOrder, IResolveOrder, IOrderVoice, IIssueDeployOrder
 	{
+		static class OrderID
+		{
+			public const string DeployTransform = "DeployTransform";
+		}
+
 		readonly Actor self;
 		readonly ActorInfo actorInfo;
 		readonly BuildingInfo buildingInfo;
@@ -75,7 +80,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "DeployTransform" ? Info.Voice : null;
+			return order.OrderString == OrderID.DeployTransform ? Info.Voice : null;
 		}
 
 		public bool CanDeploy()
@@ -103,14 +108,14 @@ namespace OpenRA.Mods.Common.Traits
 			get
 			{
 				if (!IsTraitDisabled)
-					yield return new DeployOrderTargeter("DeployTransform", 5,
+					yield return new DeployOrderTargeter(OrderID.DeployTransform, 5,
 						() => CanDeploy() ? Info.DeployCursor : Info.DeployBlockedCursor);
 			}
 		}
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "DeployTransform")
+			if (order.OrderID == OrderID.DeployTransform)
 				return new Order(order.OrderID, self, queued);
 
 			return null;
@@ -118,7 +123,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("DeployTransform", self, queued);
+			return new Order(OrderID.DeployTransform, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued) { return !IsTraitPaused && !IsTraitDisabled; }
@@ -140,9 +145,14 @@ namespace OpenRA.Mods.Common.Traits
 			self.QueueActivity(queued, GetTransformActivity(self));
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.DeployTransform };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "DeployTransform" && !IsTraitPaused && !IsTraitDisabled)
+			if (!IsTraitPaused && !IsTraitDisabled)
 				DeployTransform(order.Queued);
 		}
 	}

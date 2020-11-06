@@ -45,7 +45,10 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class PrimaryBuilding : ConditionalTrait<PrimaryBuildingInfo>, IIssueOrder, IResolveOrder
 	{
-		const string OrderID = "PrimaryProducer";
+		static class OrderID
+		{
+			public const string PrimaryProducer = "PrimaryProducer";
+		}
 
 		int primaryToken = Actor.InvalidConditionToken;
 
@@ -61,22 +64,27 @@ namespace OpenRA.Mods.Common.Traits
 				if (IsTraitDisabled)
 					yield break;
 
-				yield return new DeployOrderTargeter(OrderID, 1);
+				yield return new DeployOrderTargeter(OrderID.PrimaryProducer, 1);
 			}
 		}
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == OrderID)
+			if (order.OrderID == OrderID.PrimaryProducer)
 				return new Order(order.OrderID, self, false);
 
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.PrimaryProducer };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
 			var forceRallyPoint = RallyPoint.IsForceSet(order);
-			if (order.OrderString == OrderID || forceRallyPoint)
+			if (forceRallyPoint)
 				SetPrimaryProducer(self, !IsPrimary || forceRallyPoint);
 		}
 

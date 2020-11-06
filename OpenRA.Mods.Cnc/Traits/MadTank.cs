@@ -81,6 +81,12 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	class MadTank : IIssueOrder, IResolveOrder, IOrderVoice, IIssueDeployOrder
 	{
+		static class OrderID
+		{
+			public const string DetonateAttack = "DetonateAttack";
+			public const string Detonate = "Detonate";
+		}
+
 		readonly MadTankInfo info;
 
 		public MadTank(Actor self, MadTankInfo info)
@@ -92,14 +98,15 @@ namespace OpenRA.Mods.Cnc.Traits
 		{
 			get
 			{
-				yield return new TargetTypeOrderTargeter(new BitSet<TargetableType>("DetonateAttack"), "DetonateAttack", 5, "attack", true, false) { ForceAttack = false };
-				yield return new DeployOrderTargeter("Detonate", 5);
+				yield return new TargetTypeOrderTargeter(
+					new BitSet<TargetableType>(OrderID.DetonateAttack), OrderID.DetonateAttack, 5, "attack", true, false) { ForceAttack = false };
+				yield return new DeployOrderTargeter(OrderID.Detonate, 5);
 			}
 		}
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "DetonateAttack" && order.OrderID != "Detonate")
+			if (order.OrderID != OrderID.DetonateAttack && order.OrderID != OrderID.Detonate)
 				return null;
 
 			return new Order(order.OrderID, self, target, queued);
@@ -107,27 +114,32 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("Detonate", self, queued);
+			return new Order(OrderID.Detonate, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued) { return true; }
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "DetonateAttack" && order.OrderString != "Detonate")
+			if (order.OrderString != OrderID.DetonateAttack && order.OrderString != OrderID.Detonate)
 				return null;
 
 			return info.Voice;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.DetonateAttack, OrderID.Detonate };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "DetonateAttack")
+			if (order.OrderString == OrderID.DetonateAttack)
 			{
 				self.QueueActivity(order.Queued, new DetonationSequence(self, this, order.Target));
 				self.ShowTargetLines();
 			}
-			else if (order.OrderString == "Detonate")
+			else if (order.OrderString == OrderID.Detonate)
 				self.QueueActivity(order.Queued, new DetonationSequence(self, this));
 		}
 

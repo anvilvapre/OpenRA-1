@@ -73,6 +73,46 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class DeveloperMode : IResolveOrder, ISync, INotifyCreated, IUnlocksRenderPlayer
 	{
+		public static class OrderID
+		{
+			public const string DevAll = "DevAll";
+			public const string DevEnableTech = "DevEnableTech";
+			public const string DevFastCharge = "DevFastCharge";
+			public const string DevFastBuild = "DevFastBuild";
+			public const string DevGiveCash = "DevGiveCash";
+			public const string DevGiveCashAll = "DevGiveCashAll";
+			public const string DevGrowResources = "DevGrowResources";
+			public const string DevVisibility = "DevVisibility";
+			public const string DevPathDebug = "DevPathDebug";
+			public const string DevGiveExploration = "DevGiveExploration";
+			public const string DevResetExploration = "DevResetExploration";
+			public const string DevUnlimitedPower = "DevUnlimitedPower";
+			public const string DevBuildAnywhere = "DevBuildAnywhere";
+			public const string DevPlayerExperience = "DevPlayerExperience";
+			public const string DevKill = "DevKill";
+			public const string DevDispose = "DevDispose";
+		}
+
+		static readonly string[] ResolvableOrderStrings =
+		{
+			OrderID.DevAll,
+			OrderID.DevEnableTech,
+			OrderID.DevFastCharge,
+			OrderID.DevFastBuild,
+			OrderID.DevGiveCash,
+			OrderID.DevGiveCashAll,
+			OrderID.DevGrowResources,
+			OrderID.DevVisibility,
+			OrderID.DevPathDebug,
+			OrderID.DevGiveExploration,
+			OrderID.DevResetExploration,
+			OrderID.DevUnlimitedPower,
+			OrderID.DevBuildAnywhere,
+			OrderID.DevPlayerExperience,
+			OrderID.DevKill,
+			OrderID.DevDispose
+		};
+
 		readonly DeveloperModeInfo info;
 		public bool Enabled { get; private set; }
 
@@ -124,6 +164,11 @@ namespace OpenRA.Mods.Common.Traits
 				.OptionOrDefault("cheats", info.CheckboxEnabled);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return ResolvableOrderStrings;
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
 			if (!Enabled)
@@ -132,7 +177,7 @@ namespace OpenRA.Mods.Common.Traits
 			var debugSuffix = "";
 			switch (order.OrderString)
 			{
-				case "DevAll":
+				case OrderID.DevAll:
 				{
 					enableAll ^= true;
 					allTech = fastCharge = fastBuild = disableShroud = unlimitedPower = buildAnywhere = enableAll;
@@ -154,25 +199,25 @@ namespace OpenRA.Mods.Common.Traits
 					break;
 				}
 
-				case "DevEnableTech":
+				case OrderID.DevEnableTech:
 				{
 					allTech ^= true;
 					break;
 				}
 
-				case "DevFastCharge":
+				case OrderID.DevFastCharge:
 				{
 					fastCharge ^= true;
 					break;
 				}
 
-				case "DevFastBuild":
+				case OrderID.DevFastBuild:
 				{
 					fastBuild ^= true;
 					break;
 				}
 
-				case "DevGiveCash":
+				case OrderID.DevGiveCash:
 				{
 					var amount = order.ExtraData != 0 ? (int)order.ExtraData : info.Cash;
 					self.Trait<PlayerResources>().ChangeCash(amount);
@@ -181,7 +226,7 @@ namespace OpenRA.Mods.Common.Traits
 					break;
 				}
 
-				case "DevGiveCashAll":
+				case OrderID.DevGiveCashAll:
 				{
 					var amount = order.ExtraData != 0 ? (int)order.ExtraData : info.Cash;
 					var receivingPlayers = self.World.Players.Where(p => p.Playable);
@@ -193,7 +238,7 @@ namespace OpenRA.Mods.Common.Traits
 					break;
 				}
 
-				case "DevGrowResources":
+				case OrderID.DevGrowResources:
 				{
 					foreach (var a in self.World.ActorsWithTrait<ISeedableResource>())
 						for (var i = 0; i < info.ResourceGrowth; i++)
@@ -202,7 +247,7 @@ namespace OpenRA.Mods.Common.Traits
 					break;
 				}
 
-				case "DevVisibility":
+				case OrderID.DevVisibility:
 				{
 					disableShroud ^= true;
 					self.Owner.Shroud.Disabled = DisableShroud;
@@ -212,43 +257,43 @@ namespace OpenRA.Mods.Common.Traits
 					break;
 				}
 
-				case "DevPathDebug":
+				case OrderID.DevPathDebug:
 				{
 					pathDebug ^= true;
 					break;
 				}
 
-				case "DevGiveExploration":
+				case OrderID.DevGiveExploration:
 				{
 					self.Owner.Shroud.ExploreAll();
 					break;
 				}
 
-				case "DevResetExploration":
+				case OrderID.DevResetExploration:
 				{
 					self.Owner.Shroud.ResetExploration();
 					break;
 				}
 
-				case "DevUnlimitedPower":
+				case OrderID.DevUnlimitedPower:
 				{
 					unlimitedPower ^= true;
 					break;
 				}
 
-				case "DevBuildAnywhere":
+				case OrderID.DevBuildAnywhere:
 				{
 					buildAnywhere ^= true;
 					break;
 				}
 
-				case "DevPlayerExperience":
+				case OrderID.DevPlayerExperience:
 				{
 					self.Owner.PlayerActor.TraitOrDefault<PlayerExperience>()?.GiveExperience((int)order.ExtraData);
 					break;
 				}
 
-				case "DevKill":
+				case OrderID.DevKill:
 				{
 					if (order.Target.Type != TargetType.Actor)
 						break;
@@ -261,7 +306,7 @@ namespace OpenRA.Mods.Common.Traits
 					break;
 				}
 
-				case "DevDispose":
+				case OrderID.DevDispose:
 				{
 					if (order.Target.Type != TargetType.Actor)
 						break;

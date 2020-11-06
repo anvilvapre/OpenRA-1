@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -26,6 +27,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Guard : IResolveOrder, IOrderVoice, INotifyCreated
 	{
+		public static class OrderID
+		{
+			public const string Guard = "Guard";
+		}
+
 		readonly GuardInfo info;
 		IMove move;
 
@@ -39,10 +45,14 @@ namespace OpenRA.Mods.Common.Traits
 			move = self.Trait<IMove>();
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Guard };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Guard")
-				GuardTarget(self, order.Target, order.Queued);
+			GuardTarget(self, order.Target, order.Queued);
 		}
 
 		public void GuardTarget(Actor self, Target target, bool queued = false)
@@ -57,7 +67,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "Guard" ? info.Voice : null;
+			return order.OrderString == OrderID.Guard ? info.Voice : null;
 		}
 	}
 }

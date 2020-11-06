@@ -95,6 +95,12 @@ namespace OpenRA.Mods.Common.Traits
 	public class Harvester : IIssueOrder, IResolveOrder, IOrderVoice,
 		ISpeedModifier, ISync, INotifyCreated
 	{
+		public static class OrderID
+		{
+			public const string Harvest = "Harvest";
+			public const string Deliver = "Deliver";
+		}
+
 		public readonly HarvesterInfo Info;
 		public readonly IReadOnlyDictionary<ResourceTypeInfo, int> Contents;
 
@@ -284,7 +290,7 @@ namespace OpenRA.Mods.Common.Traits
 			get
 			{
 				yield return new EnterAlliedActorTargeter<IAcceptResourcesInfo>(
-					"Deliver",
+					OrderID.Deliver,
 					5,
 					Info.EnterCursor,
 					Info.EnterBlockedCursor,
@@ -296,7 +302,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "Deliver" || order.OrderID == "Harvest")
+			if (order.OrderID == OrderID.Deliver || order.OrderID == OrderID.Harvest)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -304,18 +310,23 @@ namespace OpenRA.Mods.Common.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Harvest")
+			if (order.OrderString == OrderID.Harvest)
 				return Info.HarvestVoice;
 
-			if (order.OrderString == "Deliver" && !IsEmpty)
+			if (order.OrderString == OrderID.Deliver && !IsEmpty)
 				return Info.DeliverVoice;
 
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Harvest, OrderID.Deliver };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Harvest")
+			if (order.OrderString == OrderID.Harvest)
 			{
 				// NOTE: An explicit harvest order allows the harvester to decide which refinery to deliver to.
 				LinkProc(self, null);
@@ -337,7 +348,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.QueueActivity(order.Queued, new FindAndDeliverResources(self, loc));
 				self.ShowTargetLines();
 			}
-			else if (order.OrderString == "Deliver")
+			else if (order.OrderString == OrderID.Deliver)
 			{
 				// Deliver orders are only valid for own/allied actors,
 				// which are guaranteed to never be frozen.
@@ -361,7 +372,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		class HarvestOrderTargeter : IOrderTargeter
 		{
-			public string OrderID { get { return "Harvest"; } }
+			public string OrderID { get { return Harvester.OrderID.Harvest; } }
 			public int OrderPriority { get { return 10; } }
 			public bool IsQueued { get; protected set; }
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers) { return true; }

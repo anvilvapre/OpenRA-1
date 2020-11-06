@@ -41,6 +41,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	class RepairsBridges : IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		static class OrderID
+		{
+			public const string RepairBridge = "RepairBridge";
+		}
+
 		readonly RepairsBridgesInfo info;
 
 		public RepairsBridges(RepairsBridgesInfo info)
@@ -55,7 +60,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "RepairBridge")
+			if (order.OrderID == OrderID.RepairBridge)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -64,7 +69,7 @@ namespace OpenRA.Mods.Common.Traits
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
 			// TODO: Add support for FrozenActors
-			if (order.OrderString != "RepairBridge" || order.Target.Type != TargetType.Actor)
+			if (order.OrderString != OrderID.RepairBridge || order.Target.Type != TargetType.Actor)
 				return null;
 
 			var targetActor = order.Target.Actor;
@@ -79,11 +84,16 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.RepairBridge };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
 			// TODO: Add support for FrozenActors
 			// The activity supports it, but still missing way to freeze bridge state on the hut
-			if (order.OrderString == "RepairBridge" && order.Target.Type == TargetType.Actor)
+			if (order.Target.Type == TargetType.Actor)
 			{
 				var targetActor = order.Target.Actor;
 				var legacyHut = targetActor.TraitOrDefault<LegacyBridgeHut>();
@@ -111,7 +121,7 @@ namespace OpenRA.Mods.Common.Traits
 			readonly RepairsBridgesInfo info;
 
 			public RepairBridgeOrderTargeter(RepairsBridgesInfo info)
-				: base("RepairBridge", 6, info.TargetCursor, true, true)
+				: base(RepairsBridges.OrderID.RepairBridge, 6, info.TargetCursor, true, true)
 			{
 				this.info = info;
 			}

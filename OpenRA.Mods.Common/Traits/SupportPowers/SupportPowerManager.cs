@@ -98,6 +98,12 @@ namespace OpenRA.Mods.Common.Traits
 				power.Tick();
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			// Any order
+			return new string[] { "" };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
 			// order.OrderString is the key of the support power

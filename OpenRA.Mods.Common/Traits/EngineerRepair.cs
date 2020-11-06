@@ -47,6 +47,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	class EngineerRepair : ConditionalTrait<EngineerRepairInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string EngineerRepair = "EngineerRepair";
+		}
+
 		public EngineerRepair(ActorInitializer init, EngineerRepairInfo info)
 			: base(info) { }
 
@@ -63,7 +68,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "EngineerRepair")
+			if (order.OrderID != OrderID.EngineerRepair)
 				return null;
 
 			return new Order(order.OrderID, self, target, queued);
@@ -86,9 +91,14 @@ namespace OpenRA.Mods.Common.Traits
 				? Info.Voice : null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.EngineerRepair };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "EngineerRepair" || !IsValidOrder(self, order))
+			if (!IsValidOrder(self, order))
 				return;
 
 			self.QueueActivity(order.Queued, new RepairBuilding(self, order.Target, Info));
@@ -100,7 +110,7 @@ namespace OpenRA.Mods.Common.Traits
 			EngineerRepairInfo info;
 
 			public EngineerRepairOrderTargeter(EngineerRepairInfo info)
-				: base("EngineerRepair", 6, info.Cursor, true, true)
+				: base(EngineerRepair.OrderID.EngineerRepair, 6, info.Cursor, true, true)
 			{
 				this.info = info;
 			}

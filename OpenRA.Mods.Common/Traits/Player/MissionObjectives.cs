@@ -63,6 +63,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class MissionObjectives : INotifyWinStateChanged, ISync, IResolveOrder
 	{
+		static class OrderID
+		{
+			public const string Surrender = "Surrender";
+		}
+
 		public readonly MissionObjectivesInfo Info;
 		readonly List<MissionObjective> objectives = new List<MissionObjective>();
 		public ReadOnlyList<MissionObjective> Objectives;
@@ -246,13 +251,15 @@ namespace OpenRA.Mods.Common.Traits
 
 		public event Action<Player, bool> ObjectiveAdded = (player, inhibitAnnouncement) => { player.HasObjectives = true; };
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Surrender };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Surrender")
-			{
-				ForceDefeat(self.Owner);
-				self.Owner.Spectating = true;
-			}
+			ForceDefeat(self.Owner);
+			self.Owner.Spectating = true;
 		}
 	}
 

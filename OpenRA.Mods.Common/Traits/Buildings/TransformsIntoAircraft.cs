@@ -45,6 +45,12 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TransformsIntoAircraft : ConditionalTrait<TransformsIntoAircraftInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string Enter = "Enter";
+			public const string Move = "Move";
+		}
+
 		readonly Actor self;
 		Transforms[] transforms;
 
@@ -95,10 +101,15 @@ namespace OpenRA.Mods.Common.Traits
 		// Note: Returns a valid order even if the unit can't move to the target
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "Enter" || order.OrderID == "Move")
+			if (order.OrderID == OrderID.Enter || order.OrderID == OrderID.Move)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Move, OrderID.Enter };
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
@@ -106,7 +117,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (IsTraitDisabled)
 				return;
 
-			if (order.OrderString == "Move")
+			if (order.OrderString == OrderID.Move)
 			{
 				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
 				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
@@ -114,7 +125,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				var target = Target.FromCell(self.World, cell);
 			}
-			else if (order.OrderString == "Enter")
+			else if (order.OrderString == OrderID.Enter)
 			{
 				// Enter and Repair orders are only valid for own/allied actors,
 				// which are guaranteed to never be frozen.
@@ -149,7 +160,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			switch (order.OrderString)
 			{
-				case "Move":
+				case OrderID.Move:
 					if (!Info.MoveIntoShroud && order.Target.Type != TargetType.Invalid)
 					{
 						var cell = self.World.Map.CellContaining(order.Target.CenterPosition);
@@ -158,7 +169,7 @@ namespace OpenRA.Mods.Common.Traits
 					}
 
 					return Info.Voice;
-				case "Enter":
+				case OrderID.Enter:
 					return Info.Voice;
 				default: return null;
 			}
@@ -182,7 +193,7 @@ namespace OpenRA.Mods.Common.Traits
 				this.aircraft = aircraft;
 			}
 
-			public string OrderID { get { return "Move"; } }
+			public string OrderID { get { return TransformsIntoAircraft.OrderID.Move; } }
 			public int OrderPriority { get { return 4; } }
 			public bool IsQueued { get; protected set; }
 

@@ -42,6 +42,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	class DeliversCash : IIssueOrder, IResolveOrder, IOrderVoice, INotifyCashTransfer
 	{
+		static class OrderID
+		{
+			public const string DeliverCash = "DeliverCash";
+		}
+
 		readonly DeliversCashInfo info;
 
 		public DeliversCash(DeliversCashInfo info)
@@ -56,7 +61,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "DeliverCash")
+			if (order.OrderID != OrderID.DeliverCash)
 				return null;
 
 			return new Order(order.OrderID, self, target, queued);
@@ -64,17 +69,19 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "DeliverCash")
+			if (order.OrderString != OrderID.DeliverCash)
 				return null;
 
 			return info.Voice;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.DeliverCash };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "DeliverCash")
-				return;
-
 			self.QueueActivity(order.Queued, new DonateCash(self, order.Target, info.Payload, info.PlayerExperience));
 			self.ShowTargetLines();
 		}
@@ -90,7 +97,7 @@ namespace OpenRA.Mods.Common.Traits
 		public class DeliversCashOrderTargeter : UnitOrderTargeter
 		{
 			public DeliversCashOrderTargeter(DeliversCashInfo info)
-				: base("DeliverCash", 5, info.Cursor, false, true) { }
+				: base(DeliversCash.OrderID.DeliverCash, 5, info.Cursor, false, true) { }
 
 			public override bool CanTargetActor(Actor self, Actor target, TargetModifiers modifiers, ref string cursor)
 			{

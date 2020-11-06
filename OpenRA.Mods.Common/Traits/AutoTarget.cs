@@ -128,6 +128,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class AutoTarget : ConditionalTrait<AutoTargetInfo>, INotifyIdle, INotifyDamage, ITick, IResolveOrder, ISync, INotifyOwnerChanged
 	{
+		static class OrderID
+		{
+			public const string SetUnitStance = "SetUnitStance";
+		}
+
 		public readonly IEnumerable<AttackBase> ActiveAttackBases;
 
 		readonly bool allowMovement;
@@ -210,9 +215,14 @@ namespace OpenRA.Mods.Common.Traits
 			SetStance(self, PredictedStance);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.SetUnitStance };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "SetUnitStance" && Info.EnableStances)
+			if (order.OrderString == OrderID.SetUnitStance && Info.EnableStances)
 				SetStance(self, (UnitStance)order.ExtraData);
 		}
 

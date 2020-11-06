@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Mods.Common.Effects;
 using OpenRA.Traits;
 
@@ -45,6 +46,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class PlaceBeacon : IResolveOrder
 	{
+		static class OrderID
+		{
+			public const string PlaceBeacon = "PlaceBeacon";
+		}
+
 		readonly PlaceBeaconInfo info;
 		readonly RadarPings radarPings;
 
@@ -57,11 +63,13 @@ namespace OpenRA.Mods.Common.Traits
 			this.info = info;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.PlaceBeacon };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "PlaceBeacon")
-				return;
-
 			self.World.AddFrameEndTask(w =>
 			{
 				if (playerBeacon != null)

@@ -42,6 +42,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class TransformsIntoRepairable : ConditionalTrait<TransformsIntoRepairableInfo>, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		static class OrderID
+		{
+			public const string Repair = "Repair";
+		}
+
 		readonly Actor self;
 		Transforms[] transforms;
 		IHealth health;
@@ -65,7 +70,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				if (!IsTraitDisabled)
 					yield return new EnterAlliedActorTargeter<BuildingInfo>(
-						"Repair",
+						OrderID.Repair,
 						5,
 						Info.EnterCursor,
 						Info.EnterBlockedCursor,
@@ -97,15 +102,20 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID == "Repair")
+			if (order.OrderID == OrderID.Repair)
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Repair };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (IsTraitDisabled || order.OrderString != "Repair")
+			if (IsTraitDisabled || order.OrderString != OrderID.Repair)
 				return;
 
 			// Repair orders are only valid for own/allied actors,
@@ -136,7 +146,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "Repair" && !IsTraitDisabled && CanRepair() ? Info.Voice : null;
+			return order.OrderString == OrderID.Repair && !IsTraitDisabled && CanRepair() ? Info.Voice : null;
 		}
 	}
 }

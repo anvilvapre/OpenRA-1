@@ -28,6 +28,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class PowerManager : INotifyCreated, ITick, ISync, IResolveOrder
 	{
+		static class OrderID
+		{
+			public const string PowerOutage = "PowerOutage";
+		}
+
 		readonly Actor self;
 		readonly PowerManagerInfo info;
 		readonly DeveloperMode devMode;
@@ -203,9 +208,14 @@ namespace OpenRA.Mods.Common.Traits
 				p.Trait.PowerLevelChanged(p.Actor);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.PowerOutage };
+		}
+
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (devMode.Enabled && order.OrderString == "PowerOutage")
+			if (devMode.Enabled)
 				TriggerPowerOutage((int)order.ExtraData);
 		}
 	}

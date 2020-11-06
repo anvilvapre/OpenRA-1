@@ -99,6 +99,13 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class ProductionQueue : IResolveOrder, ITick, ITechTreeElement, INotifyOwnerChanged, INotifyKilled, INotifySold, ISync, INotifyTransform, INotifyCreated
 	{
+		static class OrderID
+		{
+			public const string StartProduction = "StartProduction";
+			public const string PauseProduction = "PauseProduction";
+			public const string CancelProduction = "CancelProduction";
+		}
+
 		public readonly ProductionQueueInfo Info;
 		readonly Actor self;
 
@@ -363,6 +370,16 @@ namespace OpenRA.Mods.Common.Traits
 			return true;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[]
+			{
+				OrderID.StartProduction,
+				OrderID.PauseProduction,
+				OrderID.CancelProduction
+			};
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
 			if (!Enabled)
@@ -371,7 +388,7 @@ namespace OpenRA.Mods.Common.Traits
 			var rules = self.World.Map.Rules;
 			switch (order.OrderString)
 			{
-				case "StartProduction":
+				case OrderID.StartProduction:
 					var unit = rules.Actors[order.TargetString];
 					var bi = unit.TraitInfo<BuildableInfo>();
 
@@ -427,11 +444,11 @@ namespace OpenRA.Mods.Common.Traits
 					}
 
 					break;
-				case "PauseProduction":
+				case OrderID.PauseProduction:
 					PauseProduction(order.TargetString, order.ExtraData != 0);
 
 					break;
-				case "CancelProduction":
+				case OrderID.CancelProduction:
 					CancelProduction(order.TargetString, order.ExtraData);
 					break;
 			}

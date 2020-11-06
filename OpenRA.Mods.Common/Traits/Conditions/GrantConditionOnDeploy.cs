@@ -92,6 +92,11 @@ namespace OpenRA.Mods.Common.Traits
 	public class GrantConditionOnDeploy : PausableConditionalTrait<GrantConditionOnDeployInfo>, IResolveOrder, IIssueOrder,
 		INotifyDeployComplete, IIssueDeployOrder, IOrderVoice, IWrapMove, IDelayCarryallPickup
 	{
+		static class OrderID
+		{
+			public const string GrantConditionOnDeploy = "GrantConditionOnDeploy";
+		}
+
 		readonly Actor self;
 		readonly bool checkTerrainType;
 
@@ -182,17 +187,19 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("GrantConditionOnDeploy", self, queued);
+			return new Order(OrderID.GrantConditionOnDeploy, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued) { return !IsTraitPaused && !IsTraitDisabled; }
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.GrantConditionOnDeploy };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
 			if (IsTraitDisabled || IsTraitPaused)
-				return;
-
-			if (order.OrderString != "GrantConditionOnDeploy")
 				return;
 
 			self.QueueActivity(order.Queued, new DeployForGrantedCondition(self, this));
@@ -200,7 +207,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "GrantConditionOnDeploy" ? Info.Voice : null;
+			return order.OrderString == OrderID.GrantConditionOnDeploy ? Info.Voice : null;
 		}
 
 		bool CanDeploy()

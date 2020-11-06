@@ -40,6 +40,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class EntersTunnels : IIssueOrder, IResolveOrder, IOrderVoice, IObservesVariables
 	{
+		public static class OrderID
+		{
+			public const string EnterTunnel = "EnterTunnel";
+		}
+
 		readonly EntersTunnelsInfo info;
 		readonly IMove move;
 		bool requireForceMove;
@@ -65,7 +70,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
-			if (order.OrderID != "EnterTunnel")
+			if (order.OrderID != OrderID.EnterTunnel)
 				return null;
 
 			return new Order(order.OrderID, self, target, queued) { SuppressVisualFeedback = true };
@@ -73,12 +78,17 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return order.OrderString == "EnterTunnel" ? info.Voice : null;
+			return order.OrderString == OrderID.EnterTunnel ? info.Voice : null;
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.EnterTunnel };
 		}
 
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "EnterTunnel" || order.Target.Type != TargetType.Actor)
+			if (order.Target.Type != TargetType.Actor)
 				return;
 
 			var tunnel = order.Target.Actor.TraitOrDefault<TunnelEntrance>();
@@ -110,7 +120,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			public EnterTunnelOrderTargeter(string enterCursor, string enterBlockedCursor,
 				Func<Actor, TargetModifiers, bool> canTarget, Func<Actor, bool> useEnterCursor)
-				: base("EnterTunnel", 6, enterCursor, true, true)
+				: base(EntersTunnels.OrderID.EnterTunnel, 6, enterCursor, true, true)
 			{
 				this.enterCursor = enterCursor;
 				this.enterBlockedCursor = enterBlockedCursor;

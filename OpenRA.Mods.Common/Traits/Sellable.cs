@@ -10,6 +10,7 @@
 #endregion
 
 using System;
+using System.Collections.Generic;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
 using OpenRA.Mods.Common.Traits.Render;
@@ -43,6 +44,11 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Sellable : ConditionalTrait<SellableInfo>, IResolveOrder, IProvideTooltipInfo
 	{
+		static class OrderID
+		{
+			public const string Sell = "Sell";
+		}
+
 		readonly Actor self;
 		readonly Lazy<IHealth> health;
 		readonly SellableInfo info;
@@ -55,10 +61,14 @@ namespace OpenRA.Mods.Common.Traits
 			health = Exts.Lazy(() => self.TraitOrDefault<IHealth>());
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.Sell };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "Sell")
-				Sell(self);
+			Sell(self);
 		}
 
 		public void Sell(Actor self)

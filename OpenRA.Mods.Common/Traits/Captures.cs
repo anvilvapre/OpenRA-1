@@ -95,9 +95,14 @@ namespace OpenRA.Mods.Common.Traits
 			return order.OrderString == "CaptureActor" ? Info.Voice : null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { "CaptureActor" };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString != "CaptureActor" || IsTraitDisabled)
+			if (IsTraitDisabled)
 				return;
 
 			self.QueueActivity(order.Queued, new CaptureActor(self, order.Target));

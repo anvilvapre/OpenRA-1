@@ -120,6 +120,12 @@ namespace OpenRA.Mods.Common.Traits
 				DisplayIncome = int2.Lerp(lastIncome, Income, tickDelta * timestep, 1000);
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			// Any order
+			return new string[] { "" };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
 			if (order.OrderString.StartsWith("Dev"))

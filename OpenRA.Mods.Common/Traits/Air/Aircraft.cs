@@ -210,6 +210,30 @@ namespace OpenRA.Mods.Common.Traits
 		INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyActorDisposing, INotifyBecomingIdle, ICreationActivity,
 		IActorPreviewInitModifier, IDeathActorInitModifier, IIssueDeployOrder, IIssueOrder, IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string Move = "Move";
+			public const string Land = "Land";
+			public const string Enter = "Enter";
+			public const string ForceEnter = "ForceEnter";
+			public const string Repair = "Repair";
+			public const string Stop = "Stop";
+			public const string ReturnToBase = "ReturnToBase";
+			public const string Scatter = "Scatter";
+		}
+
+		static readonly string[] ResolvableOrderStrings =
+		{
+			OrderID.Move,
+			OrderID.Land,
+			OrderID.Enter,
+			OrderID.ForceEnter,
+			OrderID.Repair,
+			OrderID.Stop,
+			OrderID.ReturnToBase,
+			OrderID.Scatter
+		};
+
 		static readonly (CPos, SubCell)[] NoCells = { };
 
 		readonly Actor self;
@@ -998,7 +1022,7 @@ namespace OpenRA.Mods.Common.Traits
 			get
 			{
 				yield return new EnterAlliedActorTargeter<BuildingInfo>(
-					"ForceEnter",
+					OrderID.ForceEnter,
 					6,
 					Info.EnterCursor,
 					Info.EnterBlockedCursor,
@@ -1006,7 +1030,7 @@ namespace OpenRA.Mods.Common.Traits
 					target => Reservable.IsAvailableFor(target, self) && AircraftCanResupplyAt(target, true));
 
 				yield return new EnterAlliedActorTargeter<BuildingInfo>(
-					"Enter",
+					OrderID.Enter,
 					5,
 					Info.EnterCursor,
 					Info.EnterBlockedCursor,
@@ -1020,7 +1044,7 @@ namespace OpenRA.Mods.Common.Traits
 		public Order IssueOrder(Actor self, IOrderTargeter order, in Target target, bool queued)
 		{
 			if (!IsTraitDisabled &&
-				(order.OrderID == "Enter" || order.OrderID == "Move" || order.OrderID == "Land" || order.OrderID == "ForceEnter"))
+				(order.OrderID == OrderID.Enter || order.OrderID == OrderID.Move || order.OrderID == OrderID.Land || order.OrderID == OrderID.ForceEnter))
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -1031,7 +1055,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (IsTraitDisabled || rearmable == null || !rearmable.Info.RearmActors.Any())
 				return null;
 
-			return new Order("ReturnToBase", self, queued);
+			return new Order(OrderID.ReturnToBase, self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self, bool queued) { return rearmable != null && rearmable.Info.RearmActors.Any(); }
@@ -1043,8 +1067,8 @@ namespace OpenRA.Mods.Common.Traits
 
 			switch (order.OrderString)
 			{
-				case "Land":
-				case "Move":
+				case OrderID.Land:
+				case OrderID.Move:
 					if (!Info.MoveIntoShroud && order.Target.Type != TargetType.Invalid)
 					{
 						var cell = self.World.Map.CellContaining(order.Target.CenterPosition);
@@ -1053,15 +1077,20 @@ namespace OpenRA.Mods.Common.Traits
 					}
 
 					return Info.Voice;
-				case "Enter":
-				case "ForceEnter":
-				case "Stop":
-				case "Scatter":
+				case OrderID.Enter:
+				case OrderID.ForceEnter:
+				case OrderID.Stop:
+				case OrderID.Scatter:
 					return Info.Voice;
-				case "ReturnToBase":
+				case OrderID.ReturnToBase:
 					return rearmable != null && rearmable.Info.RearmActors.Any() ? Info.Voice : null;
 				default: return null;
 			}
+		}
+
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return ResolvableOrderStrings;
 		}
 
 		public void ResolveOrder(Actor self, Order order)
@@ -1070,7 +1099,7 @@ namespace OpenRA.Mods.Common.Traits
 				return;
 
 			var orderString = order.OrderString;
-			if (orderString == "Move")
+			if (orderString == OrderID.Move)
 			{
 				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
 				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
@@ -1085,7 +1114,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.QueueActivity(order.Queued, new Fly(self, target, WDist.FromCells(8), targetLineColor: Color.Green));
 				self.ShowTargetLines();
 			}
-			else if (orderString == "Land")
+			else if (orderString == OrderID.Land)
 			{
 				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
 				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
@@ -1099,7 +1128,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.QueueActivity(order.Queued, new Land(self, target, targetLineColor: Color.Green));
 				self.ShowTargetLines();
 			}
-			else if (orderString == "Enter" || orderString == "ForceEnter" || orderString == "Repair")
+			else if (orderString == OrderID.Enter || orderString == OrderID.ForceEnter || orderString == OrderID.Repair)
 			{
 				// Enter, ForceEnter and Repair orders are only valid for own/allied actors,
 				// which are guaranteed to never be frozen.
@@ -1107,7 +1136,7 @@ namespace OpenRA.Mods.Common.Traits
 					return;
 
 				var targetActor = order.Target.Actor;
-				var isForceEnter = orderString == "ForceEnter";
+				var isForceEnter = orderString == OrderID.ForceEnter;
 				var canResupplyAt = AircraftCanResupplyAt(targetActor, isForceEnter || !Info.TakeOffOnResupply);
 
 				// This is what the order targeter checks to display the correct cursor, so we need to make sure
@@ -1125,7 +1154,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.QueueActivity(order.Queued, new ReturnToBase(self, targetActor, forceLand));
 				self.ShowTargetLines();
 			}
-			else if (orderString == "Stop")
+			else if (orderString == OrderID.Stop)
 			{
 				// We don't want the Stop order to cancel a running Resupply activity.
 				// Resupply is always either the main activity or a child of ReturnToBase.
@@ -1136,7 +1165,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.CancelActivity();
 				UnReserve();
 			}
-			else if (orderString == "ReturnToBase")
+			else if (orderString == OrderID.ReturnToBase)
 			{
 				// Do nothing if not rearmable and don't restart activity every time deploy hotkey is triggered
 				if (rearmable == null || !rearmable.Info.RearmActors.Any() || self.CurrentActivity is ReturnToBase || GetActorBelow() != null)
@@ -1150,7 +1179,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.QueueActivity(order.Queued, new ReturnToBase(self, null, !Info.TakeOffOnResupply));
 				self.ShowTargetLines();
 			}
-			else if (orderString == "Scatter")
+			else if (orderString == OrderID.Scatter)
 				Nudge(self);
 		}
 
@@ -1249,7 +1278,7 @@ namespace OpenRA.Mods.Common.Traits
 			public AircraftMoveOrderTargeter(Aircraft aircraft)
 			{
 				this.aircraft = aircraft;
-				OrderID = "Move";
+				OrderID = Aircraft.OrderID.Move;
 			}
 
 			public bool TargetOverridesSelection(Actor self, in Target target, List<Actor> actorsAt, CPos xy, TargetModifiers modifiers)
@@ -1277,7 +1306,7 @@ namespace OpenRA.Mods.Common.Traits
 						.Any(a => a.TraitOrDefault<Building>() != null && a.TraitOrDefault<Selectable>() != null);
 
 					if (!buildingAtLocation || aircraft.CanLand(location, blockedByMobile: false))
-						OrderID = "Land";
+						OrderID = Aircraft.OrderID.Land;
 				}
 
 				IsQueued = modifiers.HasModifier(TargetModifiers.ForceQueue);

@@ -40,6 +40,12 @@ namespace OpenRA.Mods.Common.Traits
 
 	class AttackMove : IResolveOrder, IOrderVoice
 	{
+		public static class OrderID
+		{
+			public const string AttackMove = "AttackMove";
+			public const string AssaultMove = "AssaultMove";
+		}
+
 		public readonly AttackMoveInfo Info;
 		readonly IMove move;
 
@@ -58,27 +64,29 @@ namespace OpenRA.Mods.Common.Traits
 					return null;
 			}
 
-			if (order.OrderString == "AttackMove" || order.OrderString == "AssaultMove")
+			if (order.OrderString == OrderID.AttackMove || order.OrderString == OrderID.AssaultMove)
 				return Info.Voice;
 
 			return null;
 		}
 
+		public IEnumerable<string> GetResolvableOrders(Actor self)
+		{
+			return new string[] { OrderID.AttackMove, OrderID.AssaultMove };
+		}
+
 		public void ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "AttackMove" || order.OrderString == "AssaultMove")
-			{
-				var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
-				if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
-					return;
+			var cell = self.World.Map.Clamp(self.World.Map.CellContaining(order.Target.CenterPosition));
+			if (!Info.MoveIntoShroud && !self.Owner.Shroud.IsExplored(cell))
+				return;
 
-				var targetLocation = move.NearestMoveableCell(cell);
-				var assaultMoving = order.OrderString == "AssaultMove";
+			var targetLocation = move.NearestMoveableCell(cell);
+			var assaultMoving = order.OrderString == "AssaultMove";
 
-				// TODO: this should scale with unit selection group size.
-				self.QueueActivity(order.Queued, new AttackMoveActivity(self, () => move.MoveTo(targetLocation, 8, targetLineColor: Color.OrangeRed), assaultMoving));
-				self.ShowTargetLines();
-			}
+			// TODO: this should scale with unit selection group size.
+			self.QueueActivity(order.Queued, new AttackMoveActivity(self, () => move.MoveTo(targetLocation, 8, targetLineColor: Color.OrangeRed), assaultMoving));
+			self.ShowTargetLines();
 		}
 	}
 
@@ -113,7 +121,8 @@ namespace OpenRA.Mods.Common.Traits
 				world.CancelInputMode();
 
 				var queued = mi.Modifiers.HasModifier(Modifiers.Shift);
-				var orderName = mi.Modifiers.HasModifier(Modifiers.Ctrl) ? "AssaultMove" : "AttackMove";
+				var orderName = mi.Modifiers.HasModifier(Modifiers.Ctrl)
+					? AttackMove.OrderID.AssaultMove : AttackMove.OrderID.AttackMove;
 
 				// Cells outside the playable area should be clamped to the edge for consistency with move orders
 				cell = world.Map.Clamp(cell);
