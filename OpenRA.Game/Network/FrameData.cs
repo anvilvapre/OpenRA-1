@@ -27,6 +27,8 @@ namespace OpenRA.Network
 			}
 		}
 
+		const int ClientIdAllReady = -1;
+
 		readonly Dictionary<int, int> clientQuitTimes = new Dictionary<int, int>();
 		readonly Dictionary<int, Dictionary<int, byte[]>> framePackets = new Dictionary<int, Dictionary<int, byte[]>>();
 
@@ -56,26 +58,53 @@ namespace OpenRA.Network
 
 		public bool IsReadyForFrame(int frame)
 		{
-			return !ClientsNotReadyForFrame(frame).Any();
+			var frameData = framePackets.GetOrAdd(frame);
+			if (frameData.ContainsKey(ClientIdAllReady))
+				return true;
+
+			// PERF: Avoid LINQ
+			var ready = true;
+			foreach (var item in clientQuitTimes)
+			{
+				var clientId = item.Key;
+				if (frame < item.Value && !frameData.ContainsKey(clientId))
+				{
+					ready = false;
+					break;
+				}
+			}
+
+			if (ready)
+				frameData.Add(ClientIdAllReady, null);
+			return ready;
 		}
 
 		public IEnumerable<int> ClientsNotReadyForFrame(int frame)
 		{
 			var frameData = framePackets.GetOrAdd(frame);
-			return ClientsPlayingInFrame(frame)
-				.Where(client => !frameData.ContainsKey(client));
+			foreach (var item in clientQuitTimes)
+			{
+				var clientId = item.Key;
+				if (frame < item.Value && !frameData.ContainsKey(clientId))
+					yield return clientId;
+			}
 		}
 
 		public IEnumerable<ClientOrder> OrdersForFrame(World world, int frame)
 		{
+			// PERF: Avoid LINQ
 			var frameData = framePackets[frame];
-			var clientData = ClientsPlayingInFrame(frame)
-				.ToDictionary(k => k, v => frameData[v]);
-
-			return clientData
-				.SelectMany(x => x.Value
-					.ToOrderList(world)
-					.Select(o => new ClientOrder { Client = x.Key, Order = o }));
+			foreach (var item in clientQuitTimes)
+			{
+				var clientId = item.Key;
+				if (frame < item.Value)
+				{
+					// Assumes IsReadyForFrame is true
+					var orderList = OrderIO.ToOrderList(frameData[clientId], world);
+					foreach (var order in orderList)
+						yield return new ClientOrder { Client = clientId, Order = order };
+				}
+			}
 		}
 	}
 }
