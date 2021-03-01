@@ -257,9 +257,8 @@ namespace OpenRA.Network
 				clientsNode.Nodes.Add(new MiniYamlNode("Client@" + (i++).ToString(), FieldSaver.Save(c)));
 
 			root.Add(new MiniYamlNode("Clients", clientsNode));
-			return new MiniYaml("", root)
-				.ToLines("Game")
-				.JoinWith("\n");
+			var rootNode = new MiniYamlNode("Game", new MiniYaml("", root));
+			return rootNode.WriteToString();
 		}
 	}
 }

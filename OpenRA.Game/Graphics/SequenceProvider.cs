@@ -113,8 +113,7 @@ namespace OpenRA.Graphics
 				if (node.Key.StartsWith(ActorInfo.AbstractActorPrefix, StringComparison.Ordinal))
 					continue;
 
-				var key = node.Value.ToLines(node.Key).JoinWith("|");
-
+				var key = node.WriteToString('|');
 				if (sequenceCache.TryGetValue(key, out var t))
 					items.Add(node.Key, t);
 				else

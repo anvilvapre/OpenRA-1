@@ -33,15 +33,15 @@ namespace OpenRA.Mods.Common.UtilityCommands
 
 			var info = replay.GameInfo;
 
-			var lines = FieldSaver.Save(info).ToLines(replay.FilePath);
-			foreach (var line in lines)
-				Console.WriteLine(line);
+			var filePathNode = new MiniYamlNode(replay.FilePath, FieldSaver.Save(info));
+			filePathNode.Write(System.Console.Out);
 
 			Console.WriteLine("\tPlayers:");
 			var playerCount = 0;
 			foreach (var p in info.Players)
 			{
-				var playerLines = FieldSaver.Save(p).ToLines("{0}".F(playerCount++));
+				var playerNode = new MiniYamlNode("{0}".F(playerCount++), FieldSaver.Save(p));
+				var playerLines = playerNode.WriteToString().Split('\n');
 				foreach (var line in playerLines)
 					Console.WriteLine("\t\t" + line);
 			}

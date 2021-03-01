@@ -166,7 +166,7 @@ namespace OpenRA
 			// Make sure the mod is available for this session, even if saving it fails
 			LoadMod(yaml.Value, forceRegistration: true);
 
-			var lines = new List<MiniYamlNode> { yaml }.ToLines().ToArray();
+			var strYaml = new List<MiniYamlNode> { yaml }.WriteToString();
 			foreach (var source in sources.Distinct())
 			{
 				var metadataPath = Path.Combine(source, "ModMetadata");
@@ -174,7 +174,7 @@ namespace OpenRA
 				try
 				{
 					Directory.CreateDirectory(metadataPath);
-					File.WriteAllLines(Path.Combine(metadataPath, key + ".yaml"), lines);
+					File.WriteAllText(Path.Combine(metadataPath, key + ".yaml"), strYaml);
 				}
 				catch (Exception e)
 				{

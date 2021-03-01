@@ -43,8 +43,8 @@ namespace OpenRA.Mods.Common.UtilityCommands
 			if (value != null)
 				nodes.AddRange(value.Nodes);
 
-			var output = new MiniYaml(includes.JoinWith(", "), nodes);
-			Console.WriteLine(output.ToLines(key).JoinWith("\n"));
+			var output = new MiniYamlNode(key, new MiniYaml(includes.JoinWith(", "), nodes));
+			output.Write(Console.Out);
 		}
 
 		[Desc("MAPFILE", "Merge custom map rules into a form suitable for including in map.yaml.")]
