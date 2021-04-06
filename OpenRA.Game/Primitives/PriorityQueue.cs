@@ -20,6 +20,8 @@ namespace OpenRA.Primitives
 		bool Empty { get; }
 		T Peek();
 		T Pop();
+		bool TryPeek(out T elem);
+		bool TryPop(out T elem);
 	}
 
 	public class PriorityQueue<T> : IPriorityQueue<T>
@@ -41,10 +43,11 @@ namespace OpenRA.Primitives
 		{
 			var addLevel = level;
 			var addIndex = index;
+			T above;
 
-			while (addLevel >= 1 && comparer.Compare(Above(addLevel, addIndex), item) > 0)
+			while (addLevel >= 1 && comparer.Compare((above = Above(addLevel, addIndex)), item) > 0)
 			{
-				items[addLevel][addIndex] = Above(addLevel, addIndex);
+				items[addLevel][addIndex] = above;
 				--addLevel;
 				addIndex >>= 1;
 			}
@@ -89,6 +92,33 @@ namespace OpenRA.Primitives
 			if (--index < 0)
 				index = (1 << --level) - 1;
 			return ret;
+		}
+
+		public bool TryPeek(out T item)
+		{
+			if (level == 0)
+			{
+				item = default(T);
+				return false;
+			}
+
+			item = At(0, 0);
+			return true;
+		}
+
+		public bool TryPop(out T item)
+		{
+			if (level == 0)
+			{
+				item = default(T);
+				return false;
+			}
+
+			item = At(0, 0);
+			BubbleInto(0, 0, Last());
+			if (--index < 0)
+				index = (1 << --level) - 1;
+			return true;
 		}
 
 		void BubbleInto(int intoLevel, int intoIndex, T val)
