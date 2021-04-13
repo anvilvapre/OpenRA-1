@@ -100,7 +100,7 @@ namespace OpenRA.Server
 			c.Color = pr.LockColor ? pr.Color : c.PreferredColor;
 		}
 
-		static void SendData(Socket s, byte[] data)
+		static void SendData(SocketTimeoutable s, byte[] data)
 		{
 			var start = 0;
 			var length = data.Length;
@@ -266,8 +266,8 @@ namespace OpenRA.Server
 					if (State == ServerState.WaitingPlayers)
 						checkRead.AddRange(checkReadServer);
 
-					checkRead.AddRange(Conns.Select(c => c.Socket));
-					checkRead.AddRange(PreConns.Select(c => c.Socket));
+					checkRead.AddRange(Conns.Select(c => c.Socket.Socket));
+					checkRead.AddRange(PreConns.Select(c => c.Socket.Socket));
 
 					// Block for at most 1 second in order to guarantee a minimum tick rate for ServerTraits
 					// Decrease this to 100ms to improve responsiveness if we are waiting for an authentication query
@@ -286,14 +286,14 @@ namespace OpenRA.Server
 								continue;
 							}
 
-							var preConn = PreConns.SingleOrDefault(c => c.Socket == s);
+							var preConn = PreConns.SingleOrDefault(c => c.Socket.Socket == s);
 							if (preConn != null)
 							{
 								preConn.ReadData(this);
 								continue;
 							}
 
-							var conn = Conns.SingleOrDefault(c => c.Socket == s);
+							var conn = Conns.SingleOrDefault(c => c.Socket.Socket == s);
 							conn?.ReadData(this);
 						}
 
@@ -356,7 +356,7 @@ namespace OpenRA.Server
 				return;
 			}
 
-			var newConn = new Connection { Socket = newSocket };
+			var newConn = new Connection { Socket = new SocketTimeoutable(newSocket) };
 			try
 			{
 				newConn.Socket.Blocking = false;

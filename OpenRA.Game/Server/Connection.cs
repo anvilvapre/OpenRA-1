@@ -19,7 +19,7 @@ namespace OpenRA.Server
 	public class Connection
 	{
 		public const int MaxOrderLength = 131072;
-		public Socket Socket;
+		public SocketTimeoutable Socket;
 		public List<byte> Data = new List<byte>();
 		public ReceiveState State = ReceiveState.Header;
 		public int ExpectLength = 8;
