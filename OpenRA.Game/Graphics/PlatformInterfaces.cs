@@ -83,6 +83,7 @@ namespace OpenRA
 	public interface IGraphicsContext : IDisposable
 	{
 		IVertexBuffer<Vertex> CreateVertexBuffer(int size);
+		Vertex[] CreateVertices(int size);
 		ITexture CreateTexture();
 		IFrameBuffer CreateFrameBuffer(Size s);
 		IFrameBuffer CreateFrameBuffer(Size s, Color clearColor);
@@ -104,6 +105,9 @@ namespace OpenRA
 	{
 		void Bind();
 		void SetData(T[] vertices, int length);
+
+		/// Returns a vertex array of the same size.
+		T[] SwapData(T[] vertices, int length);
 		void SetData(T[] vertices, int offset, int start, int length);
 	}
 

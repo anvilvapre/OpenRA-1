@@ -333,6 +333,13 @@ namespace OpenRA
 			DrawBatch(tempBuffer, 0, numVertices, type);
 		}
 
+		public Vertex[] SwapDrawBatch(Vertex[] vertices, int numVertices, PrimitiveType type)
+		{
+			var rv = tempBuffer.SwapData(vertices, numVertices);
+			DrawBatch(tempBuffer, 0, numVertices, type);
+			return rv;
+		}
+
 		public void DrawBatch<T>(IVertexBuffer<T> vertices,
 			int firstVertex, int numVertices, PrimitiveType type)
 			where T : struct

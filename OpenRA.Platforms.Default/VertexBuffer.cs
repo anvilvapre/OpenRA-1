@@ -60,6 +60,12 @@ namespace OpenRA.Platforms.Default
 			SetData(data, 0, 0, length);
 		}
 
+		public T[] SwapData(T[] data, int length)
+		{
+			SetData(data, 0, 0, length);
+			return data;
+		}
+
 		public void SetData(T[] data, int offset, int start, int length)
 		{
 			Bind();

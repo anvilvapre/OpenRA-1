@@ -404,6 +404,11 @@ namespace OpenRA.Platforms.Default
 			return Send(getCreateVertexBuffer, length);
 		}
 
+		public Vertex[] CreateVertices(int size)
+		{
+			return GetVertices(size);
+		}
+
 		public void DisableDepthBuffer()
 		{
 			Post(doDisableDepthBuffer);
@@ -524,6 +529,12 @@ namespace OpenRA.Platforms.Default
 			var buffer = device.GetVertices(length);
 			Array.Copy(vertices, buffer, length);
 			device.Post(setData1, (buffer, length));
+		}
+
+		public Vertex[] SwapData(Vertex[] vertices, int length)
+		{
+			device.Post(setData1, (vertices, length));
+			return device.GetVertices(vertices.Length);
 		}
 
 		public void SetData(Vertex[] vertices, int offset, int start, int length)
