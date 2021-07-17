@@ -44,14 +44,16 @@ namespace OpenRA
 	{
 		public struct SourceLocation
 		{
-			public string Filename; public int Line;
+			public readonly string Filename;
+			public readonly int Line;
+			public SourceLocation(string filename, int line) { Filename = filename; Line = line; }
 			public override string ToString() { return $"{Filename}:{Line}"; }
 		}
 
-		public SourceLocation Location;
+		public readonly SourceLocation Location;
 		public string Key;
 		public MiniYaml Value;
-		public string Comment;
+		public readonly string Comment;
 
 		public MiniYamlNode(string k, MiniYaml v, string c = null)
 		{
@@ -97,6 +99,15 @@ namespace OpenRA
 		public string Value;
 		public List<MiniYamlNode> Nodes;
 
+		public MiniYaml(string value)
+			: this(value, null) { }
+
+		public MiniYaml(string value, List<MiniYamlNode> nodes)
+		{
+			Value = value;
+			Nodes = nodes ?? new List<MiniYamlNode>();
+		}
+
 		public MiniYaml Clone()
 		{
 			var clonedNodes = new MiniYamlNodes(Nodes.Count);
@@ -107,7 +118,21 @@ namespace OpenRA
 
 		public Dictionary<string, MiniYaml> ToDictionary()
 		{
-			return ToDictionary(MiniYamlIdentity);
+			// PERF: Do not use selector.
+			var ret = new Dictionary<string, MiniYaml>(Nodes.Count);
+			foreach (var y in Nodes)
+			{
+				try
+				{
+					ret.Add(y.Key, y.Value);
+				}
+				catch (ArgumentException ex)
+				{
+					throw new InvalidDataException("Duplicate key '{0}' in {1}".F(y.Key, y.Location), ex);
+				}
+			}
+
+			return ret;
 		}
 
 		public Dictionary<string, TElement> ToDictionary<TElement>(Func<MiniYaml, TElement> elementSelector)
@@ -118,7 +143,7 @@ namespace OpenRA
 		public Dictionary<TKey, TElement> ToDictionary<TKey, TElement>(
 			Func<string, TKey> keySelector, Func<MiniYaml, TElement> elementSelector)
 		{
-			var ret = new Dictionary<TKey, TElement>();
+			var ret = new Dictionary<TKey, TElement>(Nodes.Count);
 			foreach (var y in Nodes)
 			{
 				var key = keySelector(y.Key);
@@ -129,26 +154,29 @@ namespace OpenRA
 				}
 				catch (ArgumentException ex)
 				{
-					throw new InvalidDataException($"Duplicate key '{y.Key}' in {y.Location}", ex);
+					throw new InvalidDataException("Duplicate key '{0}' in {1}".F(y.Key, y.Location), ex);
 				}
 			}
 
 			return ret;
 		}
 
-		public MiniYaml(string value)
-			: this(value, null) { }
-
-		public MiniYaml(string value, List<MiniYamlNode> nodes)
+		MiniYaml FindNodeValueByKey(string key)
 		{
-			Value = value;
-			Nodes = nodes ?? new List<MiniYamlNode>();
+			if (key == null)
+				return null;
+
+			foreach (var y in Nodes)
+				if (key.Equals(y.Key))
+					return y.Value;
+
+			return null;
 		}
 
 		public static List<MiniYamlNode> NodesOrEmpty(MiniYaml y, string s)
 		{
-			var nd = y.ToDictionary();
-			return nd.ContainsKey(s) ? nd[s].Nodes : new List<MiniYamlNode>();
+			var yaml = y.FindNodeValueByKey(s);
+			return yaml != null ? yaml.Nodes : new List<MiniYamlNode>();
 		}
 
 		static List<MiniYamlNode> FromLines(IEnumerable<string> lines, string filename, bool discardCommentsAndWhitespace, Dictionary<string, string> stringPool)
@@ -160,11 +188,11 @@ namespace OpenRA
 			levels.Add(new List<MiniYamlNode>());
 
 			var lineNo = 0;
-			foreach (var ll in lines)
+			foreach (var line in lines)
 			{
-				var line = ll;
 				++lineNo;
 
+				var lineLength = line.Length;
 				var keyStart = 0;
 				var level = 0;
 				var spaces = 0;
@@ -173,16 +201,13 @@ namespace OpenRA
 				string key = null;
 				string value = null;
 				string comment = null;
-				var location = new MiniYamlNode.SourceLocation { Filename = filename, Line = lineNo };
+				var location = new MiniYamlNode.SourceLocation(filename, lineNo);
 
-				if (line.Length > 0)
+				if (lineLength > 0)
 				{
-					var currChar = line[keyStart];
-
-					while (!(currChar == '\n' || currChar == '\r') && keyStart < line.Length && !textStart)
+					while (keyStart < lineLength && !textStart)
 					{
-						currChar = line[keyStart];
-						switch (currChar)
+						switch (line[keyStart])
 						{
 							case ' ':
 								spaces++;
@@ -198,6 +223,10 @@ namespace OpenRA
 								level++;
 								keyStart++;
 								break;
+							case '\n':
+							case '\r':
+								lineLength = keyStart;
+								break;
 							default:
 								textStart = true;
 								break;
@@ -205,7 +234,7 @@ namespace OpenRA
 					}
 
 					if (levels.Count <= level)
-						throw new YamlException($"Bad indent in miniyaml at {location}");
+						throw new YamlException("Bad indent in miniyaml at {0}".F(location));
 
 					while (levels.Count > level + 1)
 						levels.RemoveAt(levels.Count - 1);
@@ -215,64 +244,81 @@ namespace OpenRA
 					// Leading and trailing whitespace is always trimmed from keys.
 					// Leading and trailing whitespace is trimmed from values unless they
 					// are marked with leading or trailing backslashes
-					var keyLength = line.Length - keyStart;
+					var keyLength = lineLength - keyStart;
 					var valueStart = -1;
 					var valueLength = 0;
 					var commentStart = -1;
-					for (var i = 0; i < line.Length; i++)
+					var hasEscapedHashChar = false;
+					var prevChar = '\0';
+					for (var i = keyStart; i < lineLength; i++)
 					{
-						if (valueStart < 0 && line[i] == ':')
+						var currChar = line[i];
+						if (currChar == '#')
+						{
+							if (prevChar == '\\')
+								hasEscapedHashChar = true;
+							else
+							{
+								commentStart = i + 1;
+								if (commentStart <= keyLength)
+									keyLength = i - keyStart;
+								else
+									valueLength = i - valueStart;
+
+								break;
+							}
+						}
+						else if (valueStart < 0 && currChar == ':')
 						{
 							valueStart = i + 1;
 							keyLength = i - keyStart;
-							valueLength = line.Length - i - 1;
+							valueLength = lineLength - i - 1;
 						}
 
-						if (commentStart < 0 && line[i] == '#' && (i == 0 || line[i - 1] != '\\'))
-						{
-							commentStart = i + 1;
-							if (commentStart <= keyLength)
-								keyLength = i - keyStart;
-							else
-								valueLength = i - valueStart;
-
-							break;
-						}
+						prevChar = currChar;
 					}
 
 					if (keyLength > 0)
+					{
 						key = line.Substring(keyStart, keyLength).Trim();
+						key = stringPool.GetOrAdd(key, key);
+					}
 
 					if (valueStart >= 0)
 					{
 						var trimmed = line.Substring(valueStart, valueLength).Trim();
-						if (trimmed.Length > 0)
+						valueLength = trimmed.Length;
+						if (valueLength > 0)
+						{
 							value = trimmed;
+
+							if (valueLength > 1)
+							{
+								// Remove leading/trailing whitespace guards
+								var trimLeading = value[0] == '\\'
+									&& (value[1] == ' ' || value[1] == '\t') ? 1 : 0;
+								var trimTrailing = value[value.Length - 1] == '\\'
+									&& (value[valueLength - 2] == ' ' || value[valueLength - 2] == '\t') ? 1 : 0;
+								if (trimLeading + trimTrailing > 0)
+									value = value.Substring(trimLeading, valueLength - trimLeading - trimTrailing);
+							}
+
+							if (hasEscapedHashChar)
+								value = value.Replace("\\#", "#");
+
+							value = stringPool.GetOrAdd(value, value);
+						}
 					}
 
 					if (commentStart >= 0 && !discardCommentsAndWhitespace)
-						comment = line.Substring(commentStart);
-
-					// Remove leading/trailing whitespace guards
-					if (value != null && value.Length > 1)
 					{
-						var trimLeading = value[0] == '\\' && (value[1] == ' ' || value[1] == '\t') ? 1 : 0;
-						var trimTrailing = value[value.Length - 1] == '\\' && (value[value.Length - 2] == ' ' || value[value.Length - 2] == '\t') ? 1 : 0;
-						if (trimLeading + trimTrailing > 0)
-							value = value.Substring(trimLeading, value.Length - trimLeading - trimTrailing);
+						comment = line.Substring(commentStart);
+						comment = stringPool.GetOrAdd(comment, comment);
 					}
-
-					// Remove escape characters from #
-					if (value != null && value.IndexOf('#') != -1)
-						value = value.Replace("\\#", "#");
 				}
 
 				if (key != null || !discardCommentsAndWhitespace)
 				{
-					key = key == null ? null : stringPool.GetOrAdd(key, key);
-					value = value == null ? null : stringPool.GetOrAdd(value, value);
-					comment = comment == null ? null : stringPool.GetOrAdd(comment, comment);
-
 					var nodes = new List<MiniYamlNode>();
 					levels[level].Add(new MiniYamlNode(key, value, comment, nodes, location));
 
