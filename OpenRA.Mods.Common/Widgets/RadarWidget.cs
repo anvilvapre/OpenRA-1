@@ -39,6 +39,7 @@ namespace OpenRA.Mods.Common.Widgets
 		readonly int previewWidth;
 		readonly int previewHeight;
 		readonly string worldDefaultCursor = ChromeMetrics.Get<string>("WorldDefaultCursor");
+		readonly MouseButtonPreference mouseButtonPreference;
 
 		float radarMinimapHeight;
 		int frame;
@@ -76,6 +77,8 @@ namespace OpenRA.Mods.Common.Widgets
 			previewHeight = world.Map.MapSize.Y;
 			if (isRectangularIsometric)
 				previewWidth = 2 * previewWidth - 1;
+
+			mouseButtonPreference = Game.Settings.Game.MouseButtonPreference;
 		}
 
 		void CellTerrainColorChanged(MPos uv)
@@ -278,7 +281,7 @@ namespace OpenRA.Mods.Common.Widgets
 			var mi = new MouseInput
 			{
 				Location = location,
-				Button = Game.Settings.Game.MouseButtonPreference.Action,
+				Button = mouseButtonPreference.Action,
 				Modifiers = Game.GetModifierKeys()
 			};
 
@@ -300,19 +303,19 @@ namespace OpenRA.Mods.Common.Widgets
 			var cell = MinimapPixelToCell(mi.Location);
 			var pos = world.Map.CenterOfCell(cell);
 			if ((mi.Event == MouseInputEvent.Down || mi.Event == MouseInputEvent.Move)
-				&& mi.Button == Game.Settings.Game.MouseButtonPreference.Cancel)
+				&& mi.Button == mouseButtonPreference.Cancel)
 			{
 				worldRenderer.Viewport.Center(pos);
 			}
 
-			if (mi.Event == MouseInputEvent.Down && mi.Button == Game.Settings.Game.MouseButtonPreference.Action)
+			if (mi.Event == MouseInputEvent.Down && mi.Button == mouseButtonPreference.Action)
 			{
 				// fake a mousedown/mouseup here
 				var location = worldRenderer.Viewport.WorldToViewPx(worldRenderer.ScreenPxPosition(pos));
 				var fakemi = new MouseInput
 				{
 					Event = MouseInputEvent.Down,
-					Button = Game.Settings.Game.MouseButtonPreference.Action,
+					Button = mouseButtonPreference.Action,
 					Modifiers = mi.Modifiers,
 					Location = location
 				};

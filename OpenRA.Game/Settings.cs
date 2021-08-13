@@ -333,12 +333,20 @@ namespace OpenRA
 					foreach (var f in kv.Value.GetType().GetFields())
 						if (args.Contains(kv.Key + "." + f.Name))
 							FieldLoader.LoadField(kv.Value, f.Name, args.GetValue(kv.Key + "." + f.Name, ""));
+
+				InitializeCalculatedFields();
 			}
 			finally
 			{
 				FieldLoader.UnknownFieldAction = err1;
 				FieldLoader.InvalidValueAction = err2;
 			}
+		}
+
+		void InitializeCalculatedFields()
+		{
+			Game.MouseButtonPreference.Action = Game.UseClassicMouseStyle ? MouseButton.Left : MouseButton.Right;
+			Game.MouseButtonPreference.Cancel = Game.UseClassicMouseStyle ? MouseButton.Right : MouseButton.Left;
 		}
 
 		public void Save()

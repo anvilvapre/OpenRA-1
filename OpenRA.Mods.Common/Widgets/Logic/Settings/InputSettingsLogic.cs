@@ -100,6 +100,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			return () =>
 			{
 				gs.UseClassicMouseStyle = dgs.UseClassicMouseStyle;
+				gs.MouseButtonPreference.Action = dgs.MouseButtonPreference.Action;
+				gs.MouseButtonPreference.Cancel = dgs.MouseButtonPreference.Cancel;
 				gs.MouseScroll = dgs.MouseScroll;
 				gs.UseAlternateScrollButton = dgs.UseAlternateScrollButton;
 				gs.LockMouseWindow = dgs.LockMouseWindow;
@@ -128,7 +130,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			{
 				var item = ScrollItemWidget.Setup(itemTemplate,
 					() => s.UseClassicMouseStyle == options[o],
-					() => s.UseClassicMouseStyle = options[o]);
+					() =>
+					{
+						s.UseClassicMouseStyle = options[o];
+						s.MouseButtonPreference.Action = s.UseClassicMouseStyle ? MouseButton.Left : MouseButton.Right;
+						s.MouseButtonPreference.Cancel = s.UseClassicMouseStyle ? MouseButton.Right : MouseButton.Left;
+					});
 				item.Get<LabelWidget>("LABEL").GetText = () => o;
 				return item;
 			};
