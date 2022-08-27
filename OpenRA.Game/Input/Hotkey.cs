@@ -42,9 +42,26 @@ namespace OpenRA
 			var mods = Modifiers.None;
 			if (parts.Length >= 2)
 			{
-				var modString = s.Substring(s.IndexOf(' '));
-				if (!Enum<Modifiers>.TryParse(modString, true, out mods))
+				var modString = parts[1];
+				switch (modString)
+				{
+				case "None":
+					break;
+				case "Shift":
+					mods = Modifiers.Shift;
+					break;
+				case "Ctrl":
+					mods = Modifiers.Ctrl;
+					break;
+				case "Alt":
+					mods = Modifiers.Alt;
+					break;
+				case "Meta":
+					mods = Modifiers.Meta;
+					break;
+				default:
 					return false;
+				}
 			}
 
 			result = new Hotkey(key, mods);
@@ -84,23 +101,34 @@ namespace OpenRA
 			return obj is Hotkey o && (Hotkey?)o == this;
 		}
 
-		public override string ToString() { return $"{Key} {Modifiers.ToString("F")}"; }
+		public override string ToString() { return $"{Key} {ModifiersToString(Modifiers)}"; }
 
 		public string DisplayString()
 		{
-			var ret = KeycodeExts.DisplayString(Key);
+			var strMod  = ModifiersToString(Modifiers);
+			if (strMod.Length == 0)
+				return ret;
 
+			return $"{strMod} + {ret}";
+		}
+
+		static string ModifiersToString(Modifiers modifiers, bool targetDisplay)
+		{
+			var ret = "";
 			if (Modifiers.HasModifier(Modifiers.Shift))
-				ret = "Shift + " + ret;
+				ret = "Shift";
 
 			if (Modifiers.HasModifier(Modifiers.Alt))
-				ret = "Alt + " + ret;
+				ret = "Alt";
 
 			if (Modifiers.HasModifier(Modifiers.Ctrl))
-				ret = "Ctrl + " + ret;
+				ret = "Ctrl";
 
 			if (Modifiers.HasModifier(Modifiers.Meta))
-				ret = (Platform.CurrentPlatform == PlatformType.OSX ? "Cmd + " : "Meta + ") + ret;
+				if (targetDisplay && Platform.CurrentPlatform == PlatformType.OSX)
+					ret = "Cmd";
+				else
+					ret = "Meta";
 
 			return ret;
 		}

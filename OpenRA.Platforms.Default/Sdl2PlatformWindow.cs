@@ -336,7 +336,7 @@ namespace OpenRA.Platforms.Default
 		static bool AreKeyModifiersCompatible()
 		{
 			// Expected to be true. Unlikely for SDL values to change across versions.
-			var compatible = (((int)Modifiers.Alt == (int)SDL.SDL_Keymod.KMOD_ALT)
+			var compatible = ((int)Modifiers.Alt == (int)SDL.SDL_Keymod.KMOD_ALT
 				&& (int)Modifiers.Ctrl == (int)SDL.SDL_Keymod.KMOD_CTRL)
 				&& (int)Modifiers.Meta == ((int)SDL.SDL_Keymod.KMOD_LGUI | (int)SDL.SDL_Keymod.KMOD_RGUI)
 				&& (int)Modifiers.Shift == ((int)SDL.SDL_Keymod.KMOD_SHIFT);
@@ -350,9 +350,9 @@ namespace OpenRA.Platforms.Default
 		static bool AreMouseButtonsCompatible()
 		{
 			// Expected to be true. Unlikely for SDL values to change across versions.
-			var compatible = ((int)MouseButton.Left == (int)SDL.SDL_BUTTON_LEFT
+			var compatible = (int)MouseButton.Left == (int)SDL.SDL_BUTTON_LEFT
 				&& (int)MouseButton.Right == (int)SDL.SDL_BUTTON_RIGHT
-				&& (int)MouseButton.Middle == (int)SDL.SDL_BUTTON_MIDDLE);
+				&& (int)MouseButton.Middle == (int)SDL.SDL_BUTTON_MIDDLE;
 
 			if (!compatible)
 				 Log.Write("graphics", $"OpenRA input mouse button ID's differ from those of SDL. Applying indirect mapping.");
