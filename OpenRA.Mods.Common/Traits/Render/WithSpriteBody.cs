@@ -61,6 +61,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		}
 	}
 
+	[TraitMultiplicity(TraitMultiplicity.OnePerActor)]
 	public class WithSpriteBody : PausableConditionalTrait<WithSpriteBodyInfo>, INotifyDamageStateChanged, IAutoMouseBounds
 	{
 		public readonly Animation DefaultAnimation;
