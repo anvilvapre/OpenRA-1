@@ -363,7 +363,14 @@ namespace OpenRA
 
 			public void Add(Actor actor, object trait)
 			{
-				values.Add(actor, (T)trait);
+				try
+				{
+					values.Add(actor, (T)trait);
+				}
+				catch (ArgumentException)
+				{
+					throw new ArgumentException($"A trait of type {typeof(T)} is already associated with actor {actor.Info.Name}. Trait was declared to have a multiplicity of OnePerActor.");
+				}
 			}
 
 			public T Get(Actor actor)
