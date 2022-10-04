@@ -120,6 +120,18 @@ namespace OpenRA
 			return false;
 		}
 
+		public bool TryGetValue(MPos uv, out T value)
+		{
+			if (Bounds.Contains(uv.U, uv.V))
+			{
+				value = Entries[Index(uv)];
+				return true;
+			}
+
+			value = default(T);
+			return false;
+		}
+
 		public bool Contains(CPos cell)
 		{
 			// .ToMPos() returns the same result if the X and Y coordinates

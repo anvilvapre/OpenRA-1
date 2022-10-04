@@ -266,25 +266,23 @@ namespace OpenRA.Mods.Common.Traits
 		public IEnumerable<Actor> GetActorsAt(CPos a)
 		{
 			// PERF: Custom enumerator for efficiency - using `yield` is slower.
-			var uv = a.ToMPos(map);
 			var layer = influence[a.Layer];
-			if (!layer.Contains(uv))
-				return Enumerable.Empty<Actor>();
+			if (layer.TryGetValue(a, out var node))
+				return new ActorsAtEnumerable(node);
 
-			return new ActorsAtEnumerable(layer[uv]);
+			return Enumerable.Empty<Actor>();
 		}
 
 		public IEnumerable<Actor> GetActorsAt(CPos a, SubCell sub)
 		{
-			var uv = a.ToMPos(map);
 			var layer = influence[a.Layer];
-			if (!layer.Contains(uv))
-				yield break;
-
-			var always = sub == SubCell.FullCell || sub == SubCell.Any;
-			for (var i = layer[uv]; i != null; i = i.Next)
-				if (i.SubCell == sub || i.SubCell == SubCell.FullCell || always)
-					yield return i.Actor;
+			if (layer.TryGetValue(a, out var head))
+			{
+				var always = sub == SubCell.FullCell || sub == SubCell.Any;
+				for (var i = head; i != null; i = i.Next)
+					if (i.SubCell == sub || i.SubCell == SubCell.FullCell || always)
+						yield return i.Actor;
+			}
 		}
 
 		public bool HasFreeSubCell(CPos cell, bool checkTransient = true)
@@ -294,66 +292,61 @@ namespace OpenRA.Mods.Common.Traits
 
 		public SubCell FreeSubCell(CPos cell, SubCell preferredSubCell = SubCell.Any, bool checkTransient = true)
 		{
-			var uv = cell.ToMPos(map);
 			var layer = influence[cell.Layer];
-			if (!layer.Contains(uv))
-				return preferredSubCell != SubCell.Any ? preferredSubCell : SubCell.First;
+			if (layer.TryGetValue(cell, out var node))
+			{
+				if (preferredSubCell != SubCell.Any && !AnyActorsAt(cell, node, preferredSubCell, checkTransient))
+					return preferredSubCell;
 
-			if (preferredSubCell != SubCell.Any && !AnyActorsAt(uv, cell, layer, preferredSubCell, checkTransient))
-				return preferredSubCell;
+				if (node == null)
+					return map.Grid.DefaultSubCell;
 
-			if (!AnyActorsAt(uv, layer))
-				return map.Grid.DefaultSubCell;
+				for (var i = (int)SubCell.First; i < map.Grid.SubCellOffsets.Length; i++)
+					if (i != (int)preferredSubCell && !AnyActorsAt(cell, node, (SubCell)i, checkTransient))
+						return (SubCell)i;
 
-			for (var i = (int)SubCell.First; i < map.Grid.SubCellOffsets.Length; i++)
-				if (i != (int)preferredSubCell && !AnyActorsAt(uv, cell, layer, (SubCell)i, checkTransient))
-					return (SubCell)i;
+				return SubCell.Invalid;
+			}
 
-			return SubCell.Invalid;
+			return preferredSubCell != SubCell.Any ? preferredSubCell : SubCell.First;
 		}
 
 		public SubCell FreeSubCell(CPos cell, SubCell preferredSubCell, Func<Actor, bool> checkIfBlocker)
 		{
-			var uv = cell.ToMPos(map);
 			var layer = influence[cell.Layer];
-			if (!layer.Contains(uv))
-				return preferredSubCell != SubCell.Any ? preferredSubCell : SubCell.First;
+			if (layer.TryGetValue(cell, out var node))
+			{
+				if (preferredSubCell != SubCell.Any && !AnyActorsAt(node, preferredSubCell, checkIfBlocker))
+					return preferredSubCell;
 
-			if (preferredSubCell != SubCell.Any && !AnyActorsAt(uv, layer, preferredSubCell, checkIfBlocker))
-				return preferredSubCell;
+				if (node == null)
+					return map.Grid.DefaultSubCell;
 
-			if (!AnyActorsAt(uv, layer))
-				return map.Grid.DefaultSubCell;
+				for (var i = (byte)SubCell.First; i < map.Grid.SubCellOffsets.Length; i++)
+					if (i != (byte)preferredSubCell && !AnyActorsAt(node, (SubCell)i, checkIfBlocker))
+						return (SubCell)i;
 
-			for (var i = (byte)SubCell.First; i < map.Grid.SubCellOffsets.Length; i++)
-				if (i != (byte)preferredSubCell && !AnyActorsAt(uv, layer, (SubCell)i, checkIfBlocker))
-					return (SubCell)i;
+				return SubCell.Invalid;
+			}
 
-			return SubCell.Invalid;
-		}
-
-		// NOTE: pos required to be in map bounds
-		bool AnyActorsAt(MPos uv, CellLayer<InfluenceNode> layer)
-		{
-			return layer[uv] != null;
+			return preferredSubCell != SubCell.Any ? preferredSubCell : SubCell.First;
 		}
 
 		// NOTE: always includes transients with influence
 		public bool AnyActorsAt(CPos a)
 		{
-			var uv = a.ToMPos(map);
 			var layer = influence[a.Layer];
-			if (!layer.Contains(uv))
-				return false;
+			if (layer.TryGetValue(a, out var node))
+				return node != null;
 
-			return AnyActorsAt(uv, layer);
+			return false;
 		}
 
 		// NOTE: pos required to be in map bounds
-		bool AnyActorsAt(MPos uv, CPos a, CellLayer<InfluenceNode> layer, SubCell sub, bool checkTransient)
+		bool AnyActorsAt(CPos a, InfluenceNode layerNode, SubCell sub, bool checkTransient)
 		{
 			var always = sub == SubCell.FullCell || sub == SubCell.Any;
-			for (var i = layer[uv]; i != null; i = i.Next)
+			for (var i = layerNode; i != null; i = i.Next)
 			{
 				if (always || i.SubCell == sub || i.SubCell == SubCell.FullCell)
 				{
@@ -372,19 +365,18 @@ namespace OpenRA.Mods.Common.Traits
 		// NOTE: can not check aircraft
 		public bool AnyActorsAt(CPos a, SubCell sub, bool checkTransient = true)
 		{
-			var uv = a.ToMPos(map);
 			var layer = influence[a.Layer];
-			if (!layer.Contains(uv))
-				return false;
+			if (layer.TryGetValue(a, out var node))
+				return AnyActorsAt(a, node, sub, checkTransient);
 
-			return AnyActorsAt(uv, a, layer, sub, checkTransient);
+			return false;
 		}
 
 		// NOTE: can not check aircraft
-		bool AnyActorsAt(MPos uv, CellLayer<InfluenceNode> layer, SubCell sub, Func<Actor, bool> withCondition)
+		bool AnyActorsAt(InfluenceNode layerNode, SubCell sub, Func<Actor, bool> withCondition)
 		{
 			var always = sub == SubCell.FullCell || sub == SubCell.Any;
-			for (var i = layer[uv]; i != null; i = i.Next)
+			for (var i = layerNode; i != null; i = i.Next)
 				if ((always || i.SubCell == sub || i.SubCell == SubCell.FullCell) && withCondition(i.Actor))
 					return true;
 
@@ -394,12 +386,11 @@ namespace OpenRA.Mods.Common.Traits
 		// NOTE: can not check aircraft
 		public bool AnyActorsAt(CPos a, SubCell sub, Func<Actor, bool> withCondition)
 		{
-			var uv = a.ToMPos(map);
 			var layer = influence[a.Layer];
-			if (!layer.Contains(uv))
-				return false;
+			if (layer.TryGetValue(a, out var node))
+				return AnyActorsAt(node, sub, withCondition);
 
-			return AnyActorsAt(uv, layer, sub, withCondition);
+			return false;
 		}
 
 		public IEnumerable<Actor> AllActors()
@@ -420,16 +411,16 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var uv = c.Cell.ToMPos(map);
 				var layer = influence[c.Cell.Layer];
-				if (!layer.Contains(uv))
-					continue;
+				if (layer.TryGetValue(uv, out var node))
+				{
+					layer[uv] = new InfluenceNode { Next = node, SubCell = c.SubCell, Actor = self };
 
-				layer[uv] = new InfluenceNode { Next = layer[uv], SubCell = c.SubCell, Actor = self };
+					if (cellTriggerInfluence.TryGetValue(c.Cell, out var triggers))
+						foreach (var t in triggers)
+							t.Dirty = true;
 
-				if (cellTriggerInfluence.TryGetValue(c.Cell, out var triggers))
-					foreach (var t in triggers)
-						t.Dirty = true;
-
-				CellUpdated?.Invoke(c.Cell);
+					CellUpdated?.Invoke(c.Cell);
+				}
 			}
 		}
 
@@ -439,30 +430,40 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				var uv = c.Cell.ToMPos(map);
 				var layer = influence[c.Cell.Layer];
-				if (!layer.Contains(uv))
-					continue;
+				if (layer.TryGetValue(uv, out var node))
+				{
+					layer[uv] = RemoveInfluenceInner(node, self);
 
-				var temp = layer[uv];
-				RemoveInfluenceInner(ref temp, self);
-				layer[uv] = temp;
+					if (cellTriggerInfluence.TryGetValue(c.Cell, out var triggers))
+						foreach (var t in triggers)
+							t.Dirty = true;
 
-				if (cellTriggerInfluence.TryGetValue(c.Cell, out var triggers))
-					foreach (var t in triggers)
-						t.Dirty = true;
-
-				CellUpdated?.Invoke(c.Cell);
+					CellUpdated?.Invoke(c.Cell);
+				}
 			}
 		}
 
-		static void RemoveInfluenceInner(ref InfluenceNode influenceNode, Actor toRemove)
+		static InfluenceNode RemoveInfluenceInner(InfluenceNode influenceNode, Actor toRemove)
 		{
-			if (influenceNode == null)
-				return;
+			InfluenceNode prev = null;
 
-			RemoveInfluenceInner(ref influenceNode.Next, toRemove);
+			for (var i = influenceNode; i != null; i = i.Next)
+			{
+				if (i.Actor == toRemove)
+				{
+					if (prev == null)
+						return i.Next;
+					else
+					{
+						prev.Next = i.Next;
+						break;
+					}
+				}
 
-			if (influenceNode.Actor == toRemove)
-				influenceNode = influenceNode.Next;
+				prev = i;
+			}
+
+			return influenceNode;
 		}
 
 		public void UpdateOccupiedCells(IOccupySpace ios)
