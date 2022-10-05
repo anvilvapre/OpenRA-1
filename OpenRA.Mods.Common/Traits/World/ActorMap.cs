@@ -182,8 +182,7 @@ namespace OpenRA.Mods.Common.Traits
 		// Position updates are done in one pass
 		// to ensure consistency during a tick
 		readonly HashSet<Actor> addActorPosition = new HashSet<Actor>();
-		readonly HashSet<Actor> removeActorPosition = new HashSet<Actor>();
-		readonly Predicate<Actor> actorShouldBeRemoved;
+		readonly HashSet<(Bin, Actor)> removeActorPosition = new HashSet<(Bin, Actor)>();
 
 		public WDist LargestActorRadius { get; }
 		public WDist LargestBlockingActorRadius { get; }
@@ -200,9 +199,6 @@ namespace OpenRA.Mods.Common.Traits
 			for (var row = 0; row < rows; row++)
 				for (var col = 0; col < cols; col++)
 					bins[row * cols + col] = new Bin();
-
-			// PERF: Cache this delegate so it does not have to be allocated repeatedly.
-			actorShouldBeRemoved = removeActorPosition.Contains;
 
 			LargestActorRadius = map.Rules.Actors.SelectMany(a => a.Value.TraitInfos<HitShapeInfo>()).Max(h => h.Type.OuterRadius);
 			var blockers = map.Rules.Actors.Where(a => a.Value.HasTraitInfo<IBlocksProjectilesInfo>());
@@ -481,12 +477,11 @@ namespace OpenRA.Mods.Common.Traits
 			// to ensure consistency during a tick
 			if (removeActorPosition.Count > 0)
 			{
-				foreach (var bin in bins)
+				foreach (var (bin, actor) in removeActorPosition)
 				{
-					var removed = bin.Actors.RemoveAll(actorShouldBeRemoved);
-					if (removed > 0)
-						foreach (var t in bin.ProximityTriggers)
-							t.Dirty = true;
+					bin.Actors.Remove(actor);
+					foreach (var t in bin.ProximityTriggers)
+						t.Dirty = true;
 				}
 
 				removeActorPosition.Clear();
@@ -597,7 +592,11 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void RemovePosition(Actor a, IOccupySpace ios)
 		{
-			removeActorPosition.Add(a);
+			var pos = a.CenterPosition;
+			var col = WorldCoordToBinIndex(pos.X).Clamp(0, cols - 1);
+			var row = WorldCoordToBinIndex(pos.Y).Clamp(0, rows - 1);
+			var bin = BinAt(row, col);
+			removeActorPosition.Add((bin, a));
 		}
 
 		public void UpdatePosition(Actor a, IOccupySpace ios)
