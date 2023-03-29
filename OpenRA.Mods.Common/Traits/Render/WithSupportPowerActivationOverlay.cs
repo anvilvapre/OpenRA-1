@@ -36,7 +36,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	public class WithSupportPowerActivationOverlay : ConditionalTrait<WithSupportPowerActivationOverlayInfo>, INotifySupportPower
 	{
-		readonly Animation overlay;
+		readonly AnimationWithDynamicOffset overlay;
 		bool visible;
 
 		public WithSupportPowerActivationOverlay(Actor self, WithSupportPowerActivationOverlayInfo info)
@@ -45,15 +45,16 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var rs = self.Trait<RenderSprites>();
 			var body = self.Trait<BodyOrientation>();
 
-			overlay = new Animation(self.World, rs.GetImage(self));
+			overlay = new AnimationWithDynamicOffset(self.World, 
+				rs.GetImage(self),
+				null,
+				() => WAngle.Zero,
+				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
+				p => RenderUtils.ZOffsetFromCenter(self, p, 1),
+				() => IsTraitDisabled || !visible);
 			overlay.PlayThen(info.Sequence, () => visible = false);
 
-			var anim = new AnimationWithOffset(overlay,
-				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => IsTraitDisabled || !visible,
-				p => RenderUtils.ZOffsetFromCenter(self, p, 1));
-
-			rs.Add(anim, info.Palette, info.IsPlayerPalette);
+			rs.Add(overlay, info.Palette, info.IsPlayerPalette);
 		}
 
 		void INotifySupportPower.Charged(Actor self) { }

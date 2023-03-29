@@ -35,7 +35,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	public class WithMakeOverlay
 	{
 		readonly WithMakeOverlayInfo info;
-		readonly AnimationWithOffset anim;
+		readonly AnimationWithStaticOffset anim;
 		bool visible;
 
 		public WithMakeOverlay(Actor self, WithMakeOverlayInfo info)
@@ -43,23 +43,21 @@ namespace OpenRA.Mods.Common.Traits.Render
 			this.info = info;
 
 			var rs = self.Trait<RenderSprites>();
-			var overlay = new Animation(self.World, rs.GetImage(self));
-			overlay.Play(info.Sequence);
-
-			anim = new AnimationWithOffset(overlay, null, () => !visible);
+			anim = new AnimationWithStaticOffset(self.World, rs.GetImage(self), () => !visible);
+			anim.Play(info.Sequence);
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
 		}
 
 		public void Forward(Actor self)
 		{
 			visible = true;
-			anim.Animation.PlayThen(info.Sequence, () => visible = false);
+			anim.PlayThen(info.Sequence, () => visible = false);
 		}
 
 		public void Reverse(Actor self)
 		{
 			visible = true;
-			anim.Animation.PlayBackwardsThen(info.Sequence, () => visible = false);
+			anim.PlayBackwardsThen(info.Sequence, () => visible = false);
 		}
 	}
 }

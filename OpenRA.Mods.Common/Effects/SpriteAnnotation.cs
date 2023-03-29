@@ -18,14 +18,14 @@ namespace OpenRA.Mods.Common.Effects
 	public class SpriteAnnotation : IEffect, IEffectAnnotation
 	{
 		readonly string palette;
-		readonly Animation anim;
+		readonly AnimationWithStaticOffset anim;
 		readonly WPos pos;
 
 		public SpriteAnnotation(WPos pos, World world, string image, string sequence, string palette)
 		{
 			this.palette = palette;
 			this.pos = pos;
-			anim = new Animation(world, image);
+			anim = new AnimationWithStaticOffset(world, image, null);
 			anim.PlayThen(sequence, () => world.AddFrameEndTask(w => { w.Remove(this); w.ScreenMap.Remove(this); }));
 			world.ScreenMap.Add(this, pos, anim.Image);
 		}
@@ -41,7 +41,7 @@ namespace OpenRA.Mods.Common.Effects
 		IEnumerable<IRenderable> IEffectAnnotation.RenderAnnotation(WorldRenderer wr)
 		{
 			var screenPos = wr.Viewport.WorldToViewPx(wr.ScreenPxPosition(pos));
-			return anim.RenderUI(wr, screenPos, WVec.Zero, 0, wr.Palette(palette));
+			return anim.RenderUI(wr, screenPos, wr.Palette(palette));
 		}
 	}
 }

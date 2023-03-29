@@ -66,26 +66,22 @@ namespace OpenRA.Mods.Common.Traits.Render
 				facing = () => f;
 			}
 
-			var anim = new Animation(init.World, Image ?? image, facing);
-			anim.IsDecoration = IsDecoration;
-			anim.PlayRepeating(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
-
 			var body = init.Actor.TraitInfo<BodyOrientationInfo>();
 			Func<WRot> orientation = () => body.QuantizeOrientation(WRot.FromYaw(facing()), facings);
 			Func<WVec> offset = () => body.LocalToWorld(Offset.Rotate(orientation()));
-			Func<int> zOffset = () =>
-			{
-				var tmpOffset = offset();
-				return tmpOffset.Y + tmpOffset.Z + 1;
-			};
+			Func<WPos, int> zOffset = (pos) => -(pos.Y + pos.Z + 1);
 
-			yield return new SpriteActorPreview(anim, offset, zOffset, p);
+			var anim = new AnimationWithDynamicOffset(init.World, Image ?? image, null, facing, offset, zOffset);
+			anim.IsDecoration = IsDecoration;
+			anim.PlayRepeating(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
+
+			yield return new SpriteActorPreview(anim, p);
 		}
 	}
 
 	public class WithIdleOverlay : PausableConditionalTrait<WithIdleOverlayInfo>, INotifyDamageStateChanged
 	{
-		readonly Animation overlay;
+		readonly AnimationWithDynamicOffset overlay;
 
 		public WithIdleOverlay(Actor self, WithIdleOverlayInfo info)
 			: base(info)
@@ -94,7 +90,15 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var body = self.Trait<BodyOrientation>();
 
 			var image = info.Image ?? rs.GetImage(self);
-			overlay = new Animation(self.World, image, () => IsTraitPaused);
+
+			overlay = new AnimationWithDynamicOffset(self.World,
+				image, 
+				() => IsTraitPaused, 
+				() => WAngle.Zero,
+				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
+				p => RenderUtils.ZOffsetFromCenter(self, p, 1),
+				() => IsTraitDisabled);
+
 			overlay.IsDecoration = info.IsDecoration;
 			if (info.StartSequence != null)
 				overlay.PlayThen(RenderSprites.NormalizeSequence(overlay, self.GetDamageState(), info.StartSequence),
@@ -102,12 +106,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			else
 				overlay.PlayRepeating(RenderSprites.NormalizeSequence(overlay, self.GetDamageState(), info.Sequence));
 
-			var anim = new AnimationWithOffset(overlay,
-				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => IsTraitDisabled,
-				p => RenderUtils.ZOffsetFromCenter(self, p, 1));
-
-			rs.Add(anim, info.Palette, info.IsPlayerPalette);
+			rs.Add(overlay, info.Palette, info.IsPlayerPalette);
 		}
 
 		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)

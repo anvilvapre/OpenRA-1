@@ -70,10 +70,10 @@ namespace OpenRA.Mods.Common.Traits.Render
 				}
 			}
 
-			var anim = new Animation(init.World, image);
+			var anim = new AnimationWithStaticOffset(init.World, image);
 			anim.PlayFetchIndex(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence), () => adjacent);
 
-			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => 0, p);
+			yield return new SpriteActorPreview(anim, p);
 		}
 
 		string IWallConnectorInfo.GetWallConnectionType()

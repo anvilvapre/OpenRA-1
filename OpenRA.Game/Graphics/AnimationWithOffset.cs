@@ -10,10 +10,12 @@
 #endregion
 
 using System;
+using System.Collections.Generic;
 using OpenRA.Primitives;
 
 namespace OpenRA.Graphics
 {
+	/*
 	public class AnimationWithOffset
 	{
 		public readonly Animation Animation;
@@ -33,6 +35,17 @@ namespace OpenRA.Graphics
 			OffsetFunc = offset;
 			DisableFunc = disable;
 			ZOffset = zOffset;
+		}
+
+		public void Render(Actor self, WorldRenderer wr, PaletteReference pal, List<IRenderable> collection)
+		{
+			var center = self.CenterPosition;
+			WVec offset;
+			int z;
+				offset = OffsetFunc?.Invoke() ?? WVec.Zero;
+			//var offset = OffsetFunc?.Invoke() ?? WVec.Zero;
+				z = ZOffset?.Invoke(center + offset) ?? 0;
+				Animation.Render(center, offset, z, pal, collection);
 		}
 
 		public IRenderable[] Render(Actor self, WorldRenderer wr, PaletteReference pal)
@@ -57,4 +70,5 @@ namespace OpenRA.Graphics
 			return new AnimationWithOffset(a, null, null, null);
 		}
 	}
+	*/
 }

@@ -50,7 +50,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	public class WithDamageOverlay : INotifyDamage
 	{
 		readonly WithDamageOverlayInfo info;
-		readonly Animation anim;
+		readonly AnimationWithStaticOffset anim;
 
 		bool isSmoking;
 
@@ -60,9 +60,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			var rs = self.Trait<RenderSprites>();
 
-			anim = new Animation(self.World, info.Image);
-			rs.Add(new AnimationWithOffset(anim, null, () => !isSmoking),
-				info.Palette, info.IsPlayerPalette);
+			anim = new AnimationWithStaticOffset(self.World, info.Image, null, () => !isSmoking);
+			rs.Add(anim, info.Palette, info.IsPlayerPalette);
 		}
 
 		void INotifyDamage.Damaged(Actor self, AttackInfo e)

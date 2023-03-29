@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	class WithResourceLevelOverlay : ConditionalTrait<WithResourceLevelOverlayInfo>, INotifyOwnerChanged, INotifyDamageStateChanged
 	{
-		readonly AnimationWithOffset anim;
+		readonly AnimationWithStaticOffset anim;
 		readonly RenderSprites rs;
 		readonly WithSpriteBody wsb;
 
@@ -46,20 +46,19 @@ namespace OpenRA.Mods.Common.Traits.Render
 			wsb = self.Trait<WithSpriteBody>();
 			playerResources = self.Owner.PlayerActor.Trait<PlayerResources>();
 
-			var a = new Animation(self.World, rs.GetImage(self));
-			a.PlayFetchIndex(info.Sequence, () =>
+			anim = new AnimationWithStaticOffset(self.World, rs.GetImage(self), null, WAngle.Zero, WVec.Zero, 1024, () => IsTraitDisabled);
+			anim.PlayFetchIndex(info.Sequence, () =>
 				playerResources.ResourceCapacity != 0 ?
-				((10 * a.CurrentSequence.Length - 1) * playerResources.Resources) / (10 * playerResources.ResourceCapacity) :
+				((10 * anim.CurrentSequence.Length - 1) * playerResources.Resources) / (10 * playerResources.ResourceCapacity) :
 				0);
 
-			anim = new AnimationWithOffset(a, null, () => IsTraitDisabled, 1024);
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
 		}
 
 		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)
 		{
-			if (anim.Animation.CurrentSequence != null)
-				anim.Animation.ReplaceAnim(wsb.NormalizeSequence(self, Info.Sequence));
+			if (anim.CurrentSequence != null)
+				anim.ReplaceAnim(wsb.NormalizeSequence(self, Info.Sequence));
 		}
 
 		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)

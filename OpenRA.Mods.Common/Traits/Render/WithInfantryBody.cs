@@ -54,7 +54,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if (!EnabledByDefault)
 				yield break;
 
-			var anim = new Animation(init.World, image, init.GetFacing());
+			var anim = new AnimationWithDynamicOffset(init.World, image, null, init.GetFacing(), () => WVec.Zero, (_) => 0);
 			anim.PlayRepeating(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), StandSequences.First()));
 
 			if (IsPlayerPalette)
@@ -62,14 +62,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 			else if (Palette != null)
 				p = init.WorldRenderer.Palette(Palette);
 
-			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => 0, p);
+			yield return new SpriteActorPreview(anim, p);
 		}
 	}
 
 	public class WithInfantryBody : ConditionalTrait<WithInfantryBodyInfo>, ITick, INotifyAttack, INotifyIdle
 	{
 		readonly IMove move;
-		protected readonly Animation DefaultAnimation;
+		protected readonly AnimationWithDynamicOffset DefaultAnimation;
 
 		bool dirty;
 		string idleSequence;
@@ -92,8 +92,15 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var self = init.Self;
 			var rs = self.Trait<RenderSprites>();
 
-			DefaultAnimation = new Animation(init.World, rs.GetImage(self), RenderSprites.MakeFacingFunc(self));
-			rs.Add(new AnimationWithOffset(DefaultAnimation, null, () => IsTraitDisabled), info.Palette, info.IsPlayerPalette);
+			DefaultAnimation = new AnimationWithDynamicOffset(init.World,
+				rs.GetImage(self),
+				null,
+				RenderSprites.MakeFacingFunc(self),
+				() => WVec.Zero,
+				(_) => 0,
+				() => IsTraitDisabled);
+
+			rs.Add(DefaultAnimation, info.Palette, info.IsPlayerPalette);
 			PlayStandAnimation(self);
 
 			move = init.Self.Trait<IMove>();

@@ -40,9 +40,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, string image, int facings, PaletteReference p)
 		{
-			var anim = new Animation(init.World, image);
+			var anim = new AnimationWithStaticOffset(init.World, image);
 			anim.PlayRepeating(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), IdleSequence));
-			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => 0, p);
+			yield return new SpriteActorPreview(anim, p);
 		}
 	}
 

@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	class WithChargeOverlay : PausableConditionalTrait<WithChargeOverlayInfo>, INotifyDamageStateChanged
 	{
-		readonly Animation overlay;
+		readonly AnimationWithStaticOffset overlay;
 
 		public WithChargeOverlay(Actor self, WithChargeOverlayInfo info)
 			: base(info)
@@ -44,12 +44,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var attackCharges = self.Trait<AttackCharges>();
 			var attackChargesInfo = (AttackChargesInfo)attackCharges.Info;
 
-			overlay = new Animation(self.World, rs.GetImage(self), () => IsTraitPaused);
+			overlay = new AnimationWithStaticOffset(self.World, rs.GetImage(self), () => IsTraitPaused, WAngle.Zero, WVec.Zero, 1024, () => IsTraitDisabled);
 			overlay.PlayFetchIndex(wsb.NormalizeSequence(self, info.Sequence),
 				() => int2.Lerp(0, overlay.CurrentSequence.Length, attackCharges.ChargeLevel, attackChargesInfo.ChargeLevel + 1));
 
-			rs.Add(new AnimationWithOffset(overlay, null, () => IsTraitDisabled, 1024),
-				info.Palette, info.IsPlayerPalette);
+			rs.Add(overlay, info.Palette, info.IsPlayerPalette);
 		}
 
 		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)

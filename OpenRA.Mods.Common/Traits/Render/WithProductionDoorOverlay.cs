@@ -24,12 +24,12 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, string image, int facings, PaletteReference p)
 		{
-			var anim = new Animation(init.World, image);
+			var bi = init.Actor.TraitInfo<BuildingInfo>();
+			var zOffset = bi.CenterOffset(init.World).Y + 512; // Additional 512 units move from center -> top of cell
+			var anim = new AnimationWithStaticOffset(init.World, image, null, WAngle.Zero, WVec.Zero, zOffset);
 			anim.PlayFetchIndex(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence), () => 0);
 
-			var bi = init.Actor.TraitInfo<BuildingInfo>();
-			var offset = bi.CenterOffset(init.World).Y + 512; // Additional 512 units move from center -> top of cell
-			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => offset, p);
+			yield return new SpriteActorPreview(anim, p);
 		}
 
 		public override object Create(ActorInitializer init) { return new WithProductionDoorOverlay(init.Self, this); }
@@ -37,7 +37,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	class WithProductionDoorOverlay : ConditionalTrait<WithProductionDoorOverlayInfo>, ITick, INotifyProduction, INotifyDamageStateChanged
 	{
-		readonly Animation door;
+		readonly AnimationWithStaticOffset door;
 		int desiredFrame;
 		CPos openExit;
 		Actor exitingActor;
@@ -46,14 +46,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 			: base(info)
 		{
 			var renderSprites = self.Trait<RenderSprites>();
-			door = new Animation(self.World, renderSprites.GetImage(self));
+			var buildingInfo = self.Info.TraitInfo<BuildingInfo>();
+			var zOffset = buildingInfo.CenterOffset(self.World).Y + 512;
+
+			door = new AnimationWithStaticOffset(self.World, renderSprites.GetImage(self), null, WAngle.Zero, WVec.Zero, zOffset, () => IsTraitDisabled);
 			door.PlayFetchDirection(RenderSprites.NormalizeSequence(door, self.GetDamageState(), info.Sequence),
 				() => desiredFrame - door.CurrentFrame);
 
-			var buildingInfo = self.Info.TraitInfo<BuildingInfo>();
-
-			var offset = buildingInfo.CenterOffset(self.World).Y + 512;
-			renderSprites.Add(new AnimationWithOffset(door, null, () => IsTraitDisabled, offset));
+			renderSprites.Add(door);
 		}
 
 		void ITick.Tick(Actor self)

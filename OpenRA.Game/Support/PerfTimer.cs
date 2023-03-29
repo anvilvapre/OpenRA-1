@@ -74,7 +74,8 @@ namespace OpenRA.Support
 				Log.Write("perf", FormatString, ElapsedMs, Indentation + name);
 		}
 
-		float ElapsedMs => 1000f * ticks / Stopwatch.Frequency;
+		//float ElapsedMs => 1000f * ticks / Stopwatch.Frequency;
+		float ElapsedMs => ticks;
 
 		public static void LogLongTick(long startStopwatchTicks, long endStopwatchTicks, string name, object item)
 		{

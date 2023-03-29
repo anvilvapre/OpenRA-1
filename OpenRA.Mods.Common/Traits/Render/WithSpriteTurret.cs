@@ -51,24 +51,21 @@ namespace OpenRA.Mods.Common.Traits.Render
 				.First(tt => tt.Turret == Turret);
 
 			var turretFacing = t.WorldFacingFromInit(init);
-			var anim = new Animation(init.World, image, turretFacing);
-			anim.Play(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
 
 			var facing = init.GetFacing();
 			Func<WRot> orientation = () => body.QuantizeOrientation(WRot.FromYaw(facing()), facings);
 			Func<WVec> offset = () => body.LocalToWorld(t.Offset.Rotate(orientation()));
-			Func<int> zOffset = () =>
-			{
-				var tmpOffset = offset();
-				return -(tmpOffset.Y + tmpOffset.Z) + 1;
-			};
+			Func<WPos, int> zOffset = (pos) => -(pos.Y + pos.Y) + 1;
+
+			var anim = new AnimationWithDynamicOffset(init.World, image, null, turretFacing, offset, zOffset);
+			anim.Play(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
 
 			if (IsPlayerPalette)
 				p = init.WorldRenderer.Palette(Palette + init.Get<OwnerInit>().InternalName);
 			else if (Palette != null)
 				p = init.WorldRenderer.Palette(Palette);
 
-			yield return new SpriteActorPreview(anim, offset, zOffset, p);
+			yield return new SpriteActorPreview(anim, p);
 		}
 	}
 
@@ -92,10 +89,10 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			DefaultAnimation = new Animation(self.World, rs.GetImage(self), () => t.WorldOrientation.Yaw);
 			DefaultAnimation.PlayRepeating(NormalizeSequence(self, info.Sequence));
-			rs.Add(new AnimationWithOffset(DefaultAnimation,
+			rs.Add(new AnimationWithDynamicOffset(self.World, rs.GetImage(self), null, () => t.WorldOrientation.Yaw,
 				() => TurretOffset(self),
-				() => IsTraitDisabled,
-				p => RenderUtils.ZOffsetFromCenter(self, p, 1)), info.Palette, info.IsPlayerPalette);
+				p => RenderUtils.ZOffsetFromCenter(self, p, 1),
+				() => IsTraitDisabled), info.Palette, info.IsPlayerPalette);
 
 			// Restrict turret facings to match the sprite
 			t.QuantizedFacings = DefaultAnimation.CurrentSequence.Facings;

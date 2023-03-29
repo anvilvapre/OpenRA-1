@@ -80,7 +80,7 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly new AttackGarrisonedInfo Info;
 		Lazy<BodyOrientation> coords;
 		List<Armament> armaments;
-		List<AnimationWithOffset> muzzles;
+		List<AnimationWithDynamicOffset> muzzles;
 		Dictionary<Actor, IFacing> paxFacing;
 		Dictionary<Actor, IPositionable> paxPos;
 		Dictionary<Actor, RenderSprites> paxRender;
@@ -91,7 +91,7 @@ namespace OpenRA.Mods.Common.Traits
 			Info = info;
 			coords = Exts.Lazy(() => self.Trait<BodyOrientation>());
 			armaments = new List<Armament>();
-			muzzles = new List<AnimationWithOffset>();
+			muzzles = new List<AnimationWithDynamicOffset>();
 			paxFacing = new Dictionary<Actor, IFacing>();
 			paxPos = new Dictionary<Actor, IPositionable>();
 			paxRender = new Dictionary<Actor, RenderSprites>();
@@ -171,15 +171,17 @@ namespace OpenRA.Mods.Common.Traits
 				if (a.Info.MuzzleSequence != null)
 				{
 					// Muzzle facing is fixed once the firing starts
-					var muzzleAnim = new Animation(self.World, paxRender[a.Actor].GetImage(a.Actor), () => targetYaw);
 					var sequence = a.Info.MuzzleSequence;
-					var muzzleFlash = new AnimationWithOffset(muzzleAnim,
+					var muzzleFlash = new AnimationWithDynamicOffset(
+						self.World, paxRender[a.Actor].GetImage(a.Actor),
+						null,
+						() => targetYaw,
 						() => PortOffset(self, port),
-						() => false,
-						p => RenderUtils.ZOffsetFromCenter(self, p, 1024));
+						p => RenderUtils.ZOffsetFromCenter(self, p, 1024),
+						() => false);
 
 					muzzles.Add(muzzleFlash);
-					muzzleAnim.PlayThen(sequence, () => muzzles.Remove(muzzleFlash));
+					muzzleFlash.PlayThen(sequence, () => muzzles.Remove(muzzleFlash));
 				}
 
 				foreach (var npa in self.TraitsImplementing<INotifyAttack>())
@@ -209,7 +211,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			// Take a copy so that Tick() can remove animations
 			foreach (var m in muzzles.ToArray())
-				m.Animation.Tick();
+				m.Tick(self);
 		}
 	}
 }

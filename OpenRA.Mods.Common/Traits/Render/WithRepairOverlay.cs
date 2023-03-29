@@ -45,7 +45,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	public class WithRepairOverlay : PausableConditionalTrait<WithRepairOverlayInfo>, INotifyDamageStateChanged, INotifyResupply
 	{
-		readonly Animation overlay;
+		readonly AnimationWithDynamicOffset overlay;
 		bool visible;
 		bool repairing;
 
@@ -55,15 +55,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var rs = self.Trait<RenderSprites>();
 			var body = self.Trait<BodyOrientation>();
 
-			overlay = new Animation(self.World, rs.GetImage(self), () => IsTraitPaused);
+			overlay = new AnimationWithDynamicOffset(self.World, rs.GetImage(self), () => IsTraitPaused,
+				() => WAngle.Zero,
+				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
+				p => RenderUtils.ZOffsetFromCenter(self, p, 1),
+				() => IsTraitDisabled || !visible);
 			overlay.PlayThen(info.Sequence, () => visible = false);
 
-			var anim = new AnimationWithOffset(overlay,
-				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => IsTraitDisabled || !visible,
-				p => RenderUtils.ZOffsetFromCenter(self, p, 1));
-
-			rs.Add(anim, info.Palette, info.IsPlayerPalette);
+			rs.Add(overlay, info.Palette, info.IsPlayerPalette);
 		}
 
 		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)

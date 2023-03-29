@@ -46,25 +46,21 @@ namespace OpenRA.Mods.Common.Traits.Render
 				.First(tt => tt.Turret == armament.Turret);
 
 			var turretFacing = t.WorldFacingFromInit(init);
-			var anim = new Animation(init.World, image, turretFacing);
-			anim.Play(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
 
 			var facing = init.GetFacing();
 			Func<WRot> orientation = () => body.QuantizeOrientation(WRot.FromYaw(facing()), facings);
 			Func<WVec> turretOffset = () => body.LocalToWorld(t.Offset.Rotate(orientation()));
-			Func<int> zOffset = () =>
-			{
-				var tmpOffset = turretOffset();
-				return -(tmpOffset.Y + tmpOffset.Z) + 1;
-			};
+			Func<WPos, int> zOffset = (pos) => -(pos.Y + pos.Z) + 1;
 
-			yield return new SpriteActorPreview(anim, turretOffset, zOffset, p);
+			var anim = new AnimationWithDynamicOffset(init.World, image, null, turretFacing, turretOffset, zOffset);
+			anim.Play(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence));
+			yield return new SpriteActorPreview(anim, p);
 		}
 	}
 
 	public class WithSpriteBarrel : ConditionalTrait<WithSpriteBarrelInfo>
 	{
-		public readonly Animation DefaultAnimation;
+		public readonly AnimationWithDynamicOffset DefaultAnimation;
 		readonly RenderSprites rs;
 		readonly Actor self;
 		readonly Armament armament;
@@ -82,10 +78,18 @@ namespace OpenRA.Mods.Common.Traits.Render
 				.First(tt => tt.Name == armament.Info.Turret);
 
 			rs = self.Trait<RenderSprites>();
-			DefaultAnimation = new Animation(self.World, rs.GetImage(self), () => turreted.WorldOrientation.Yaw);
+
+			DefaultAnimation = new AnimationWithDynamicOffset(
+				self.World, 
+				rs.GetImage(self),
+				null,
+				() => turreted.WorldOrientation.Yaw,
+				() => BarrelOffset(),
+				p => RenderUtils.ZOffsetFromCenter(self, p, 0),
+				() => IsTraitDisabled);
+
 			DefaultAnimation.PlayRepeating(NormalizeSequence(self, Info.Sequence));
-			rs.Add(new AnimationWithOffset(
-				DefaultAnimation, () => BarrelOffset(), () => IsTraitDisabled, p => RenderUtils.ZOffsetFromCenter(self, p, 0)));
+			rs.Add(DefaultAnimation);
 
 			// Restrict turret facings to match the sprite
 			turreted.QuantizedFacings = DefaultAnimation.CurrentSequence.Facings;

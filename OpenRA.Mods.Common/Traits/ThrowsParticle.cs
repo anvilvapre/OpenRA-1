@@ -84,9 +84,9 @@ namespace OpenRA.Mods.Common.Traits
 			direction = rotationSpeed < 0 ? -1 : 1;
 			rotation = new WAngle(Math.Abs(rotationSpeed));
 
-			var anim = new Animation(init.World, rs.GetImage(self), () => facing);
+			var anim = new AnimationWithDynamicOffset(init.World, rs.GetImage(self), null, () => facing, () => pos, (p) => 0, null);
 			anim.PlayRepeating(info.Anim);
-			rs.Add(new AnimationWithOffset(anim, () => pos, null));
+			rs.Add(anim);
 		}
 
 		void ITick.Tick(Actor self)

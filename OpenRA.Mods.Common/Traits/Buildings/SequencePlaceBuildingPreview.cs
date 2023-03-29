@@ -78,7 +78,7 @@ namespace OpenRA.Mods.Common.Traits
 					yield return r;
 
 			var centerPosition = wr.World.Map.CenterOfCell(topLeft) + centerOffset;
-			foreach (var r in preview.Render(centerPosition, WVec.Zero, 0, palette))
+			foreach (var r in preview.Render(centerPosition, palette))
 			{
 				if (info.SequenceAlpha < 1f && r is IModifyableRenderable mr)
 					yield return mr.WithAlpha(mr.Alpha * info.SequenceAlpha);

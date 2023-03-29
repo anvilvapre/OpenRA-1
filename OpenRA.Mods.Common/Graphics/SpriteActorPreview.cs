@@ -18,16 +18,12 @@ namespace OpenRA.Mods.Common.Graphics
 {
 	public class SpriteActorPreview : IActorPreview
 	{
-		readonly Animation animation;
-		readonly Func<WVec> offset;
-		readonly Func<int> zOffset;
+		readonly AnimationWithFacing animation;
 		readonly PaletteReference pr;
 
-		public SpriteActorPreview(Animation animation, Func<WVec> offset, Func<int> zOffset, PaletteReference pr)
+		public SpriteActorPreview(AnimationWithFacing animation, PaletteReference pr)
 		{
 			this.animation = animation;
-			this.offset = offset;
-			this.zOffset = zOffset;
 			this.pr = pr;
 		}
 
@@ -35,17 +31,17 @@ namespace OpenRA.Mods.Common.Graphics
 
 		IEnumerable<IRenderable> IActorPreview.RenderUI(WorldRenderer wr, int2 pos, float scale)
 		{
-			return animation.RenderUI(wr, pos, offset(), zOffset(), pr, scale);
+			return animation.RenderUI(wr, pos, pr, scale);
 		}
 
 		IEnumerable<IRenderable> IActorPreview.Render(WorldRenderer wr, WPos pos)
 		{
-			return animation.Render(pos, offset(), zOffset(), pr);
+			return animation.Render(pos, pr);
 		}
 
 		IEnumerable<Rectangle> IActorPreview.ScreenBounds(WorldRenderer wr, WPos pos)
 		{
-			yield return animation.ScreenBounds(wr, pos, offset());
+			yield return animation.ScreenBounds(wr, pos);
 		}
 	}
 }

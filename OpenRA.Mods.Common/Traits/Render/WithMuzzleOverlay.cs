@@ -30,7 +30,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	class WithMuzzleOverlay : ConditionalTrait<WithMuzzleOverlayInfo>, INotifyAttack, IRender, ITick
 	{
 		readonly Dictionary<Barrel, bool> visible = new Dictionary<Barrel, bool>();
-		readonly Dictionary<Barrel, AnimationWithOffset> anims = new Dictionary<Barrel, AnimationWithOffset>();
+		readonly Dictionary<Barrel, AnimationWithDynamicOffset> anims = new Dictionary<Barrel, AnimationWithDynamicOffset>();
 		readonly Func<WAngle> getFacing;
 		readonly Armament[] armaments;
 
@@ -59,13 +59,15 @@ namespace OpenRA.Mods.Common.Traits.Render
 					else
 						getFacing = () => WAngle.Zero;
 
-					var muzzleFlash = new Animation(self.World, render.GetImage(self), getFacing);
+					var muzzleFlash = new AnimationWithDynamicOffset(self.World, render.GetImage(self), 
+						null,
+						getFacing,
+						() => info.IgnoreOffset ? WVec.Zero : arm.MuzzleOffset(self, barrel),
+						p => RenderUtils.ZOffsetFromCenter(self, p, 2),
+						() => IsTraitDisabled || !visible[barrel]);
+
 					visible.Add(barrel, false);
-					anims.Add(barrel,
-						new AnimationWithOffset(muzzleFlash,
-							() => info.IgnoreOffset ? WVec.Zero : arm.MuzzleOffset(self, barrel),
-							() => IsTraitDisabled || !visible[barrel],
-							p => RenderUtils.ZOffsetFromCenter(self, p, 2)));
+					anims.Add(barrel, muzzleFlash);
 				}
 			}
 		}
@@ -77,7 +79,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			var sequence = a.Info.MuzzleSequence;
 			visible[barrel] = true;
-			anims[barrel].Animation.PlayThen(sequence, () => visible[barrel] = false);
+			anims[barrel].PlayThen(sequence, () => visible[barrel] = false);
 		}
 
 		void INotifyAttack.PreparingAttack(Actor self, in Target target, Armament a, Barrel barrel) { }
@@ -108,7 +110,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		void ITick.Tick(Actor self)
 		{
 			foreach (var a in anims.Values)
-				a.Animation.Tick();
+				a.Tick(self);
 		}
 	}
 }

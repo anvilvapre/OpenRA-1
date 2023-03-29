@@ -36,7 +36,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	public class WithDockedOverlay : PausableConditionalTrait<WithDockedOverlayInfo>, INotifyDocking
 	{
-		readonly AnimationWithOffset anim;
+		readonly AnimationWithDynamicOffset anim;
 		bool docked;
 
 		public WithDockedOverlay(Actor self, WithDockedOverlayInfo info)
@@ -45,12 +45,13 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var rs = self.Trait<RenderSprites>();
 			var body = self.Trait<BodyOrientation>();
 
-			var overlay = new Animation(self.World, rs.GetImage(self), () => IsTraitPaused);
-			overlay.Play(info.Sequence);
-
-			anim = new AnimationWithOffset(overlay,
+			anim = new AnimationWithDynamicOffset(self.World,
+				rs.GetImage(self),
+				() => IsTraitPaused,
+				() => WAngle.Zero,
 				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
 				() => IsTraitDisabled || !docked);
+			anim.Play(info.Sequence);
 
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
 		}
@@ -58,7 +59,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		void PlayDockingOverlay()
 		{
 			if (docked)
-				anim.Animation.PlayThen(Info.Sequence, PlayDockingOverlay);
+				anim.PlayThen(Info.Sequence, PlayDockingOverlay);
 		}
 
 		void INotifyDocking.Docked(Actor self, Actor harvester) { docked = true; PlayDockingOverlay(); }

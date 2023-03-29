@@ -86,26 +86,22 @@ namespace OpenRA.Mods.Common.Traits.Render
 				facing = () => f;
 			}
 
-			var anim = new Animation(init.World, image);
-			anim.PlayThen(OpeningSequence, () => anim.PlayRepeating(Sequence));
-
 			var body = init.Actor.TraitInfo<BodyOrientationInfo>();
 			Func<WRot> orientation = () => body.QuantizeOrientation(WRot.FromYaw(facing()), facings);
 			Func<WVec> offset = () => body.LocalToWorld(Offset.Rotate(orientation()));
-			Func<int> zOffset = () =>
-			{
-				var tmpOffset = offset();
-				return tmpOffset.Y + tmpOffset.Z + 1;
-			};
+			Func<WPos, int> zOffset = (pos) => -(pos.Y + pos.Z) + 1;
 
-			yield return new SpriteActorPreview(anim, offset, zOffset, p);
+			var anim = new AnimationWithDynamicOffset(init.World, image, null, facing, offset, zOffset);
+			anim.PlayThen(OpeningSequence, () => anim.PlayRepeating(Sequence));
+
+			yield return new SpriteActorPreview(anim, p);
 		}
 	}
 
 	public class WithParachute : ConditionalTrait<WithParachuteInfo>, ITick, IRender
 	{
 		readonly Animation shadow;
-		readonly AnimationWithOffset anim;
+		readonly AnimationWithDynamicOffset anim;
 		readonly WithParachuteInfo info;
 		readonly float3 shadowColor;
 		readonly float shadowAlpha;
@@ -129,10 +125,13 @@ namespace OpenRA.Mods.Common.Traits.Render
 			// For this, info.Image must not be null
 			var overlay = new Animation(self.World, info.Image);
 			var body = self.Trait<BodyOrientation>();
-			anim = new AnimationWithOffset(overlay,
-				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => IsTraitDisabled && !renderProlonged,
-				p => RenderUtils.ZOffsetFromCenter(self, p, 1));
+			anim = new AnimationWithDynamicOffset(self.World,
+				info.Image,
+				null,
+				() => WAngle.Zero,
+				() => (body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))) + info.ShadowOffset),
+				p => RenderUtils.ZOffsetFromCenter(self, p, 1),
+				() => IsTraitDisabled && !renderProlonged);
 
 			var rs = self.Trait<RenderSprites>();
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
@@ -146,7 +145,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if (info.Image == null)
 				return;
 
-			anim.Animation.PlayThen(info.OpeningSequence, () => anim.Animation.PlayRepeating(info.Sequence));
+			anim.PlayThen(info.OpeningSequence, () => anim.PlayRepeating(info.Sequence));
 		}
 
 		protected override void TraitDisabled(Actor self)
@@ -156,9 +155,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			renderProlonged = true;
 			if (!string.IsNullOrEmpty(info.ClosingSequence))
-				anim.Animation.PlayThen(info.ClosingSequence, () => renderProlonged = false);
+				anim.PlayThen(info.ClosingSequence, () => renderProlonged = false);
 			else
-				anim.Animation.PlayBackwardsThen(info.OpeningSequence, () => renderProlonged = false);
+				anim.PlayBackwardsThen(info.OpeningSequence, () => renderProlonged = false);
 		}
 
 		void ITick.Tick(Actor self)
@@ -198,7 +197,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			var dat = self.World.Map.DistanceAboveTerrain(self.CenterPosition);
 			var pos = self.CenterPosition - new WVec(0, 0, dat.Length);
-			return new Rectangle[] { shadow.ScreenBounds(wr, pos, info.ShadowOffset) };
+			return new Rectangle[] { shadow.ScreenBounds(wr, pos) };
 		}
 	}
 }

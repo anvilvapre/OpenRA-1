@@ -43,7 +43,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	public class WithProductionOverlay : PausableConditionalTrait<WithProductionOverlayInfo>, INotifyDamageStateChanged, INotifyCreated, INotifyOwnerChanged
 	{
 		readonly Actor self;
-		readonly Animation overlay;
+		readonly AnimationWithDynamicOffset overlay;
 		readonly ProductionInfo[] productionInfos;
 		ProductionQueue[] queues;
 
@@ -62,14 +62,16 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			productionInfos = self.Info.TraitInfos<ProductionInfo>().ToArray();
 
-			overlay = new Animation(self.World, rs.GetImage(self), () => IsTraitPaused);
+			overlay = new AnimationWithDynamicOffset(self.World,
+				rs.GetImage(self),
+				() => IsTraitPaused,
+				() => WAngle.Zero,
+				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
+				(_) => 0,
+				() => !IsProducing || IsTraitDisabled);
 			overlay.PlayRepeating(info.Sequence);
 
-			var anim = new AnimationWithOffset(overlay,
-				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => !IsProducing || IsTraitDisabled);
-
-			rs.Add(anim, info.Palette, info.IsPlayerPalette);
+			rs.Add(overlay, info.Palette, info.IsPlayerPalette);
 		}
 
 		void CacheQueues(Actor self)
