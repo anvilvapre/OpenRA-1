@@ -17,6 +17,7 @@ namespace OpenRA
 {
 	public enum OrderType : byte
 	{
+		None = 0x00,
 		Ack = 0x10,
 		Ping = 0x20,
 		SyncHash = 0x65,
