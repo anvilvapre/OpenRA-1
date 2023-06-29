@@ -67,10 +67,10 @@ namespace OpenRA.Mods.Common.Server
 
 						if (c.TimeSinceLastResponse < ConnTimeout)
 						{
-							if (!c.TimeoutMessageShown && c.TimeSinceLastResponse > PingInterval * 2)
+							if (c.TimeSinceLastResponse > PingInterval * 2 && Game.RunTime - c.TimeoutMessageShownTime > PingInterval * 2)
 							{
 								server.SendLocalizedMessage(ConnectionProblems, Translation.Arguments("player", client.Name));
-								c.TimeoutMessageShown = true;
+								c.TimeoutMessageShownTime = Game.RunTime;
 							}
 						}
 						else

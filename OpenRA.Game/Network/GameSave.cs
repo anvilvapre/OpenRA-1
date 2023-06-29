@@ -121,10 +121,10 @@ namespace OpenRA.Network
 				LastOrdersFrameId = rs.ReadInt32();
 				LastSyncFrame = (SyncFrame)FrameIO.Convert(new OrderFrame(rs.ReadInt32(), rs.ReadBytes(SyncFrame.SizeOfBody)));
 
-				var globalSettings = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Connection.MaxOrderLength));
+				var globalSettings = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Frame.MaxBodySize));
 				GlobalSettings = Session.Global.Deserialize(globalSettings[0].Value);
 
-				var slots = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Connection.MaxOrderLength));
+				var slots = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Frame.MaxBodySize));
 				Slots = new Dictionary<string, Session.Slot>();
 				foreach (var s in slots)
 				{
@@ -132,7 +132,7 @@ namespace OpenRA.Network
 					Slots.Add(slot.PlayerReference, slot);
 				}
 
-				var slotClients = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Connection.MaxOrderLength));
+				var slotClients = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Frame.MaxBodySize));
 				SlotClients = new Dictionary<string, SlotClient>();
 				foreach (var s in slotClients)
 				{
@@ -143,7 +143,7 @@ namespace OpenRA.Network
 				if (rs.Position != traitDataOffset || rs.ReadInt32() != TraitDataMarker)
 					throw new InvalidDataException("Invalid orasav file");
 
-				var traitData = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Connection.MaxOrderLength));
+				var traitData = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Frame.MaxBodySize));
 				foreach (var td in traitData)
 					TraitData.Add(int.Parse(td.Key), td.Value);
 

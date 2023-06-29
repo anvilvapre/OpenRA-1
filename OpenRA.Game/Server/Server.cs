@@ -434,7 +434,7 @@ namespace OpenRA.Server
 			try
 			{
 				// Send handshake and client index.
-				newConn.TrySendData(new ProtocolHandshakeMessage(newConn.PlayerIndex));
+				newConn.TrySendMessage(new ProtocolHandshakeMessage(newConn.PlayerIndex));
 
 				// Dispatch a handshake order
 				var request = new HandshakeRequest
@@ -705,7 +705,7 @@ namespace OpenRA.Server
 
 		void DispatchMessageToClient(Connection c, IServerMessage message)
 		{
-			if (!c.TrySendData(message))
+			if (!c.TrySendMessage(message))
 			{
 				DropClient(c);
 				Log.Write("server", $"Dropping client {c} because dispatching orders failed!");
@@ -860,10 +860,7 @@ namespace OpenRA.Server
 					// an EndOfOrders marker with the correct frame number.
 					// TODO: This should be handled by the order buffering system too
 					conn.LastOrdersFrame = frameId;
-
-					var ms = new MemoryStream(frame.BodySize);
-					frame.CopyTo(ms, true);
-					frame = new OrderFrame(frameId, ms.GetBuffer());
+					frame = new OrderFrame(frameId, frame);
 				}
 
 				DispatchOrdersToClients(conn, frame);

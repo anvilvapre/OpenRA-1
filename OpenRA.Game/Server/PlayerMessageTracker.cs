@@ -25,10 +25,10 @@ namespace OpenRA.Server
 		readonly Action<Connection, IServerMessage> dispatchMessageToClient;
 		readonly Action<Connection, string, Dictionary<string, object>> sendLocalizedMessageTo;
 
-		public PlayerMessageTracker(Server server, Action<Connection, IServerMessage> dispatchOrdersToClient, Action<Connection, string, Dictionary<string, object>> sendLocalizedMessageTo)
+		public PlayerMessageTracker(Server server, Action<Connection, IServerMessage> dispatchMessageToClient, Action<Connection, string, Dictionary<string, object>> sendLocalizedMessageTo)
 		{
 			this.server = server;
-			this.dispatchMessageToClient = dispatchOrdersToClient;
+			this.dispatchMessageToClient = dispatchMessageToClient;
 			this.sendLocalizedMessageTo = sendLocalizedMessageTo;
 		}
 
