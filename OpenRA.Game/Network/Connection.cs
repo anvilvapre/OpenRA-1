@@ -288,7 +288,7 @@ namespace OpenRA.Network
 			while (sentImmediateOrders.TryDequeue(out var i))
 			{
 				orderManager.ReceiveImmediateOrders(clientId, i);
-				Recorder?.Receive(clientId, i.Serialize(0));
+				Recorder?.Receive(clientId, i.ToImmediateFrame());
 
 				// An immediate order may trigger a chain of actions that disposes the OrderManager and connection.
 				// Bail out to avoid potential problems from acting on disposed objects.

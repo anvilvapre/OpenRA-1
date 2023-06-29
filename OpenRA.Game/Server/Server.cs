@@ -13,7 +13,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -197,12 +196,12 @@ namespace OpenRA.Server
 				Version = ModData.Manifest.Metadata.Version,
 			};
 
-			recorder.ReceiveFrame(0, 0, new Order("HandshakeRequest", null, false)
+			recorder.Receive(0, new HandshakeFrame(new Order("HandshakeRequest", null, false)
 			{
 				Type = OrderType.Handshake,
 				IsImmediate = true,
 				TargetString = request.Serialize(),
-			}.Serialize());
+			}.Serialize()));
 
 			var response = new HandshakeResponse()
 			{
@@ -212,12 +211,12 @@ namespace OpenRA.Server
 				Client = new Session.Client(),
 			};
 
-			recorder.ReceiveFrame(0, 0, new Order("HandshakeResponse", null, false)
+			recorder.Receive(0, new HandshakeFrame(new Order("HandshakeResponse", null, false)
 			{
 				Type = OrderType.Handshake,
 				IsImmediate = true,
 				TargetString = response.Serialize(),
-			}.Serialize());
+			}.Serialize()));
 		}
 
 		void MapStatusChanged(string uid, Session.MapStatus status)
@@ -280,7 +279,8 @@ namespace OpenRA.Server
 								}
 							}
 						}
-					}) { Name = $"Connection listener ({listener.LocalEndpoint})", IsBackground = true }.Start();
+					})
+					{ Name = $"Connection listener ({listener.LocalEndpoint})", IsBackground = true }.Start();
 				}
 				catch (SocketException ex)
 				{
@@ -317,7 +317,7 @@ namespace OpenRA.Server
 			Map = ModData.MapCache[settings.Map];
 			MapStatusCache = new MapStatusCache(modData, MapStatusChanged, type == ServerType.Dedicated && settings.EnableLintChecks);
 
-			playerMessageTracker = new PlayerMessageTracker(this, DispatchOrdersToClient, SendLocalizedMessageTo);
+			playerMessageTracker = new PlayerMessageTracker(this, DispatchMessageToClient, SendLocalizedMessageTo);
 
 			LobbyInfo = new Session
 			{
@@ -371,11 +371,10 @@ namespace OpenRA.Server
 						{
 							foreach (var (playerIndex, scale) in orderBuffer.GetTickScales())
 							{
-								var frame = CreateTickScaleFrame(scale);
 								var con = Conns.SingleOrDefault(c => c.PlayerIndex == playerIndex);
 
 								if (con != null && con.Validated)
-									DispatchFrameToClient(con, playerIndex, frame);
+									DispatchMessageToClient(con, new ServerMessage(playerIndex, new TickScaleFrame(scale)));
 							}
 						}
 					}
@@ -407,9 +406,9 @@ namespace OpenRA.Server
 			return nextPlayerIndex++;
 		}
 
-		internal void OnConnectionPacket(Connection conn, int frame, byte[] data)
+		internal void OnConnectionFrame(Connection conn, Frame frame)
 		{
-			events.Add(new ConnectionPacketEvent(conn, frame, data));
+			events.Add(new ConnectionFrameEvent(conn, frame));
 		}
 
 		internal void OnConnectionPing(Connection conn, int[] pingHistory, byte queueLength)
@@ -435,10 +434,7 @@ namespace OpenRA.Server
 			try
 			{
 				// Send handshake and client index.
-				var ms = new MemoryStream(8);
-				ms.WriteArray(BitConverter.GetBytes(ProtocolVersion.Handshake));
-				ms.WriteArray(BitConverter.GetBytes(newConn.PlayerIndex));
-				newConn.TrySendData(ms.ToArray());
+				newConn.TrySendData(new ProtocolHandshakeMessage(newConn.PlayerIndex));
 
 				// Dispatch a handshake order
 				var request = new HandshakeRequest
@@ -448,12 +444,12 @@ namespace OpenRA.Server
 					AuthToken = token
 				};
 
-				DispatchOrdersToClient(newConn, 0, 0, new Order("HandshakeRequest", null, false)
+				DispatchMessageToClient(newConn, new ServerMessage(new HandshakeFrame(new Order("HandshakeRequest", null, false)
 				{
 					Type = OrderType.Handshake,
 					IsImmediate = true,
 					TargetString = request.Serialize()
-				}.Serialize());
+				}.Serialize())));
 			}
 			catch (Exception e)
 			{
@@ -702,49 +698,17 @@ namespace OpenRA.Server
 			}
 		}
 
-		static byte[] CreateFrame(int client, int frame, byte[] data)
+		void DispatchOrderToClient(Connection c, int client, int frameId, Order o)
 		{
-			var ms = new MemoryStream(data.Length + 12);
-			ms.WriteArray(BitConverter.GetBytes(data.Length + 4));
-			ms.WriteArray(BitConverter.GetBytes(client));
-			ms.WriteArray(BitConverter.GetBytes(frame));
-			ms.WriteArray(data);
-			return ms.GetBuffer();
+			DispatchMessageToClient(c, new ServerMessage(client, new OrderFrame(frameId, o.Serialize())));
 		}
 
-		static byte[] CreateAckFrame(int frame, byte count)
+		void DispatchMessageToClient(Connection c, IServerMessage message)
 		{
-			var ms = new MemoryStream(14);
-			ms.WriteArray(BitConverter.GetBytes(6));
-			ms.WriteArray(BitConverter.GetBytes(0));
-			ms.WriteArray(BitConverter.GetBytes(frame));
-			ms.WriteByte((byte)OrderType.Ack);
-			ms.WriteByte(count);
-			return ms.GetBuffer();
-		}
-
-		static byte[] CreateTickScaleFrame(float scale)
-		{
-			var ms = new MemoryStream(17);
-			ms.WriteArray(BitConverter.GetBytes(9));
-			ms.WriteArray(BitConverter.GetBytes(0));
-			ms.WriteArray(BitConverter.GetBytes(0));
-			ms.WriteByte((byte)OrderType.TickScale);
-			ms.Write(scale);
-			return ms.GetBuffer();
-		}
-
-		void DispatchOrdersToClient(Connection c, int client, int frame, byte[] data)
-		{
-			DispatchFrameToClient(c, client, CreateFrame(client, frame, data));
-		}
-
-		void DispatchFrameToClient(Connection c, int client, byte[] frameData)
-		{
-			if (!c.TrySendData(frameData))
+			if (!c.TrySendData(message))
 			{
 				DropClient(c);
-				Log.Write("server", $"Dropping client {client.ToString(CultureInfo.InvariantCulture)} because dispatching orders failed!");
+				Log.Write("server", $"Dropping client {c} because dispatching orders failed!");
 			}
 		}
 
@@ -802,27 +766,18 @@ namespace OpenRA.Server
 			recorder = null;
 		}
 
-		readonly Dictionary<int, byte[]> syncForFrame = new();
-		int lastDefeatStateFrame;
+		readonly Dictionary<int, SyncFrame> syncForFrame = new();
+		int lastDefeatStateFrameId;
 		ulong lastDefeatState;
 
-		void HandleSyncOrder(int frame, byte[] packet)
+		void HandleSyncOrder(SyncFrame frame)
 		{
-			if (syncForFrame.TryGetValue(frame, out var existingSync))
+			if (syncForFrame.TryGetValue(frame.Id, out var existingSync))
 			{
-				if (packet.Length != existingSync.Length)
+				if (frame.SyncHash != existingSync.SyncHash || frame.DefeatState != existingSync.DefeatState)
 				{
-					OutOfSync(frame);
+					OutOfSync(frame.Id);
 					return;
-				}
-
-				for (var i = 0; i < packet.Length; i++)
-				{
-					if (packet[i] != existingSync[i])
-					{
-						OutOfSync(frame);
-						return;
-					}
 				}
 			}
 			else
@@ -830,70 +785,62 @@ namespace OpenRA.Server
 				// Update player losses based on the new defeat state.
 				// Do this once for the first player, the check above
 				// guarantees a desync if any other player disagrees.
-				var playerDefeatState = BitConverter.ToUInt64(packet, 1 + 4);
-				if (frame > lastDefeatStateFrame && lastDefeatState != playerDefeatState)
+				if (frame.Id > lastDefeatStateFrameId && lastDefeatState != frame.DefeatState)
 				{
-					var newDefeats = playerDefeatState & ~lastDefeatState;
+					var newDefeats = frame.DefeatState & ~lastDefeatState;
 					for (var i = 0; i < worldPlayers.Count; i++)
 						if ((newDefeats & (1UL << i)) != 0)
 							SetPlayerDefeat(i);
 
-					lastDefeatState = playerDefeatState;
-					lastDefeatStateFrame = frame;
+					lastDefeatState = frame.DefeatState;
+					lastDefeatStateFrameId = frame.Id;
 				}
 
-				syncForFrame.Add(frame, packet);
+				syncForFrame.Add(frame.Id, frame);
 			}
 		}
 
-		public void DispatchOrdersToClients(Connection conn, int frame, byte[] data)
+		public void DispatchOrdersToClients(Connection conn, Frame frame)
 		{
 			var from = conn.PlayerIndex;
-			var frameData = CreateFrame(from, frame, data);
+			var message = new SerializedMessage(new ServerMessage(from, frame));
 			foreach (var c in Conns.ToList())
 				if (c != conn && c.Validated)
-					DispatchFrameToClient(c, from, frameData);
+					DispatchMessageToClient(c, message);
 
-			RecordOrder(frame, data, from);
+			RecordOrder(frame, from);
 		}
 
-		void RecordOrder(int frame, byte[] data, int from)
+		void RecordOrder(Frame frame, int from)
 		{
-			recorder?.ReceiveFrame(from, frame, data);
-
-			if (data.Length > 0 && data[0] == (byte)OrderType.SyncHash)
-			{
-				if (data.Length == Order.SyncHashOrderLength)
-					HandleSyncOrder(frame, data);
-				else
-					Log.Write("server", $"Dropped sync order with length {data.Length} from client {from}. Expected length {Order.SyncHashOrderLength}.");
-			}
+			recorder?.Receive(from, frame);
+			if (frame.Type == OrderType.SyncHash)
+				HandleSyncOrder((SyncFrame)frame);
 		}
 
 		public void DispatchServerOrdersToClients(Order order)
 		{
-			DispatchServerOrdersToClients(order.Serialize());
+			DispatchServerOrdersToClients(new OrderFrame(Frame.IdImmediateOrServerOrder, order.Serialize()));
 		}
 
-		public void DispatchServerOrdersToClients(byte[] data, int frame = 0)
+		public void DispatchServerOrdersToClients(Frame frame)
 		{
-			var from = 0;
-			var frameData = CreateFrame(from, frame, data);
+			var message = new ServerMessage(frame);
 			foreach (var c in Conns.ToList())
 				if (c.Validated)
-					DispatchFrameToClient(c, from, frameData);
+					DispatchMessageToClient(c, message);
 
-			RecordOrder(frame, data, from);
+			RecordOrder(frame, ServerMessage.SourceServer);
 		}
 
-		public void ReceiveOrders(Connection conn, int frame, byte[] data)
+		public void ReceiveOrders(Connection conn, Frame frame)
 		{
 			// Make sure we don't accidentally forward on orders from clients who we have just dropped
 			if (!Conns.Contains(conn))
 				return;
 
-			if (frame == 0)
-				InterpretServerOrders(conn, data);
+			if (frame.Id == Frame.IdImmediateOrServerOrder)
+				InterpretServerOrders(conn, (OrderFrame)frame);
 			else
 			{
 				// Non-immediate orders must be projected into the future so that all players can
@@ -902,46 +849,42 @@ namespace OpenRA.Server
 				// sent it just to update the frame number would be wasteful. We instead send them
 				// a separate Ack packet that tells them to apply the order from a locally stored queue.
 				// TODO: Replace static latency with a dynamic order buffering system
-				if (data.Length == 0 || data[0] != (byte)OrderType.SyncHash)
+				if (frame.Type != OrderType.SyncHash)
 				{
-					frame += OrderLatency;
-					DispatchFrameToClient(conn, conn.PlayerIndex, CreateAckFrame(frame, 1));
+					var frameId = frame.Id + OrderLatency;
+					DispatchMessageToClient(conn, new ServerMessage(conn.PlayerIndex, new AckFrame(frameId, 1)));
 
 					orderBuffer.AddOrderTimestamp(conn.PlayerIndex);
 
 					// Track the last frame for each client so the disconnect handling can write
 					// an EndOfOrders marker with the correct frame number.
 					// TODO: This should be handled by the order buffering system too
-					conn.LastOrdersFrame = frame;
+					conn.LastOrdersFrame = frameId;
+
+					var ms = new MemoryStream(frame.BodySize);
+					frame.CopyTo(ms, true);
+					frame = new OrderFrame(frameId, ms.GetBuffer());
 				}
 
-				DispatchOrdersToClients(conn, frame, data);
+				DispatchOrdersToClients(conn, frame);
 			}
 
-			GameSave?.DispatchOrders(conn, frame, data);
+			GameSave?.DispatchOrders(conn, frame);
 		}
 
-		void InterpretServerOrders(Connection conn, byte[] data)
+		void InterpretServerOrders(Connection conn, OrderFrame frame)
 		{
-			var ms = new MemoryStream(data);
-			var br = new BinaryReader(ms);
-
-			try
+			var orderData = new OrderPacket(frame);
+			foreach (var order in orderData.GetOrders(null))
 			{
-				while (ms.Position < ms.Length)
-				{
-					var o = Order.Deserialize(null, br);
-					if (o != null)
-						InterpretServerOrder(conn, o);
-				}
+				if (order != null)
+					InterpretServerOrder(conn, order);
 			}
-			catch (EndOfStreamException) { }
-			catch (NotImplementedException) { }
 		}
 
 		public void SendOrderTo(Connection conn, string order, string data)
 		{
-			DispatchOrdersToClient(conn, 0, 0, Order.FromTargetString(order, data, true).Serialize());
+			DispatchOrderToClient(conn, 0, Frame.IdImmediateOrServerOrder, Order.FromTargetString(order, data, true));
 		}
 
 		public void SendMessage(string text)
@@ -964,7 +907,7 @@ namespace OpenRA.Server
 		public void SendLocalizedMessageTo(Connection conn, string key, Dictionary<string, object> arguments = null)
 		{
 			var text = LocalizedMessage.Serialize(key, arguments);
-			DispatchOrdersToClient(conn, 0, 0, Order.FromTargetString("LocalizedMessage", text, true).Serialize());
+			DispatchOrderToClient(conn, 0, Frame.IdImmediateOrServerOrder, Order.FromTargetString("LocalizedMessage", text, true));
 		}
 
 		void WriteLineWithTimeStamp(string line)
@@ -1010,7 +953,7 @@ namespace OpenRA.Server
 					case "Chat":
 						{
 							if (Type == ServerType.Local || !playerMessageTracker.IsPlayerAtFloodLimit(conn))
-								DispatchOrdersToClients(conn, 0, o.Serialize());
+								DispatchOrdersToClients(conn, OrderFrame.CreateImmediate(o.Serialize()));
 
 							break;
 						}
@@ -1218,10 +1161,7 @@ namespace OpenRA.Server
 					}
 				}
 
-				var disconnectPacket = new MemoryStream(5);
-				disconnectPacket.WriteByte((byte)OrderType.Disconnect);
-				disconnectPacket.Write(toDrop.PlayerIndex);
-				DispatchServerOrdersToClients(disconnectPacket.ToArray(), toDrop.LastOrdersFrame + 1);
+				DispatchServerOrdersToClients(new DisconnectFrame(toDrop.LastOrdersFrame + 1, toDrop.PlayerIndex));
 
 				if (gameInfo != null)
 					foreach (var player in gameInfo.Players.Where(p => p.ClientIndex == toDrop.PlayerIndex))
@@ -1372,12 +1312,12 @@ namespace OpenRA.Server
 				if (GameSave != null)
 				{
 					GameSave.StartGame(LobbyInfo, Map);
-					if (GameSave.LastOrdersFrame >= 0)
+					if (GameSave.LastOrdersFrameId >= 0)
 					{
 						startGameData = new List<MiniYamlNode>()
 						{
-							new MiniYamlNode("SaveLastOrdersFrame", GameSave.LastOrdersFrame.ToString()),
-							new MiniYamlNode("SaveSyncFrame", GameSave.LastSyncFrame.ToString())
+							new MiniYamlNode("SaveLastOrdersFrame", GameSave.LastOrdersFrameId.ToString()),
+							new MiniYamlNode("SaveSyncFrame", GameSave.LastSyncFrame.Id.ToString())
 						}.WriteToString();
 					}
 				}
@@ -1388,16 +1328,16 @@ namespace OpenRA.Server
 					t.GameStarted(this);
 
 				var firstFrame = 1;
-				if (GameSave != null && GameSave.LastOrdersFrame >= 0)
+				if (GameSave != null && GameSave.LastOrdersFrameId >= 0)
 				{
-					GameSave.ParseOrders(LobbyInfo, (frame, client, data) =>
+					GameSave.ParseOrders(LobbyInfo, (frame) =>
 					{
 						foreach (var c in Conns)
 							if (c.Validated)
-								DispatchOrdersToClient(c, client, frame, data);
+								DispatchMessageToClient(c, frame);
 					});
 
-					firstFrame += GameSave.LastOrdersFrame;
+					firstFrame += GameSave.LastOrdersFrameId;
 				}
 
 				// ReceiveOrders projects player orders into the future so that all players can
@@ -1411,12 +1351,12 @@ namespace OpenRA.Server
 					for (var i = 0; i < OrderLatency; i++)
 					{
 						from.LastOrdersFrame = firstFrame + i;
-						var frameData = CreateFrame(from.PlayerIndex, from.LastOrdersFrame, Array.Empty<byte>());
+						var message = new ServerMessage(from.PlayerIndex, new OrderFrame(from.LastOrdersFrame, Array.Empty<byte>()));
 						foreach (var to in conns)
-							DispatchFrameToClient(to, from.PlayerIndex, frameData);
+							DispatchMessageToClient(to, message);
 
-						RecordOrder(from.LastOrdersFrame, Array.Empty<byte>(), from.PlayerIndex);
-						GameSave?.DispatchOrders(from, from.LastOrdersFrame, Array.Empty<byte>());
+						RecordOrder(message.Frame, from.PlayerIndex);
+						GameSave?.DispatchOrders(from, message.Frame);
 					}
 				}
 			}
@@ -1469,22 +1409,20 @@ namespace OpenRA.Server
 			}
 		}
 
-		sealed class ConnectionPacketEvent : IServerEvent
+		sealed class ConnectionFrameEvent : IServerEvent
 		{
 			readonly Connection connection;
-			readonly int frame;
-			readonly byte[] data;
+			readonly Frame frame;
 
-			public ConnectionPacketEvent(Connection connection, int frame, byte[] data)
+			public ConnectionFrameEvent(Connection connection, Frame frame)
 			{
 				this.connection = connection;
 				this.frame = frame;
-				this.data = data;
 			}
 
 			void IServerEvent.Invoke(Server server)
 			{
-				server.ReceiveOrders(connection, frame, data);
+				server.ReceiveOrders(connection, frame);
 			}
 		}
 
@@ -1494,9 +1432,9 @@ namespace OpenRA.Server
 			readonly int[] pingHistory;
 
 			// TODO: future net code changes
-			#pragma warning disable IDE0052
+#pragma warning disable IDE0052
 			readonly byte queueLength;
-			#pragma warning restore IDE0052
+#pragma warning restore IDE0052
 
 			public ConnectionPingEvent(Connection connection, int[] pingHistory, byte queueLength)
 			{

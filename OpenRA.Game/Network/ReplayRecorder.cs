@@ -26,12 +26,16 @@ namespace OpenRA.Network
 		readonly Func<string> chooseFilename;
 		MemoryStream preStartBuffer = new();
 
-		static bool IsGameStart(byte[] data)
+		static bool IsGameStart(Frame frame)
 		{
-			if (!OrderIO.TryParseOrderPacket(data, out var orders))
+			if (frame.Type != OrderType.Fields && frame.Type != OrderType.Handshake)
 				return false;
 
-			return orders.Frame == 0 && orders.Orders.GetOrders(null).Any(o => o.OrderString == "StartGame");
+			if (frame.Id != Frame.IdImmediateOrServerOrder)
+				return false;
+
+			var orderData = new OrderPacket((OrderFrame)frame);
+			return orderData.GetOrders(null).Any(o => o.OrderString == "StartGame");
 		}
 
 		public ReplayRecorder(Func<string> chooseFilename)
@@ -71,12 +75,17 @@ namespace OpenRA.Network
 			writer = new BinaryWriter(file);
 		}
 
-		public void Receive(int clientID, byte[] data)
+		public void Receive(int clientID, byte[] frameData)
+		{
+			Receive(clientID, FrameIO.Parse(clientID, frameData));
+		}
+
+		public void Receive(int clientID, Frame frame)
 		{
 			if (disposed) // TODO: This can be removed once NetworkConnection is fixed to dispose properly.
 				return;
 
-			if (preStartBuffer != null && IsGameStart(data))
+			if (preStartBuffer != null && IsGameStart(frame))
 			{
 				writer.Flush();
 				var preStartData = preStartBuffer.ToArray();
@@ -85,16 +94,9 @@ namespace OpenRA.Network
 			}
 
 			writer.Write(clientID);
-			writer.Write(data.Length);
-			writer.Write(data);
-		}
-
-		public void ReceiveFrame(int clientID, int frame, byte[] data)
-		{
-			var ms = new MemoryStream(4 + data.Length);
-			ms.WriteArray(BitConverter.GetBytes(frame));
-			ms.WriteArray(data);
-			Receive(clientID, ms.GetBuffer());
+			writer.Write(frame.SerializedSize);
+			writer.Flush();
+			frame.CopyTo(writer.BaseStream);
 		}
 
 		bool disposed;

@@ -25,11 +25,11 @@ namespace OpenRA.Network
 	{
 		int SerializedSize { get; }
 
-		Stream CopyTo(Stream stream);
+		void CopyTo(Stream stream);
 
 		byte[] Serialize()
 		{
-			var ms = new MemoryStream();
+			var ms = new MemoryStream(SerializedSize);
 			CopyTo(ms);
 			return ms.GetBuffer();
 		}
@@ -43,40 +43,16 @@ namespace OpenRA.Network
 		}
 	}
 
-	/// <summary>Used as intermediate format to send the same frame to multiple clients.</summary>
-	public sealed class SerializedFrame
-	{
-		public int SerializedSize => Data.Length;
-		public readonly byte[] Data;
-
-		public SerializedFrame(IFrame source)
-			: this(source.Serialize())
-		{
-		}
-
-		public SerializedFrame(byte[] data)
-		{
-			Data = data;
-		}
-
-		public Stream CopyTo(Stream stream)
-		{
-			stream.WriteArray(Data);
-			return stream;
-		}
-
-		public StringBuilder ToString(StringBuilder sb, bool close)
-		{
-			return sb.Append($"SerializedFrame [SerializedSize={Data.Length}]");
-		}
-	}
-
 	public abstract class Frame : IFrame
 	{
-		public const int SizeOfId = sizeof(int);
-		public const int MaxSize = 666;
+		public const int SizeOfOrderType = sizeof(byte);
 
-		public const int IdImmediateOrder = 0;
+		public const int SizeOfId = sizeof(int);
+		public const int MaxBodySize = 131072;
+
+		public const int MaxSerializedSize = SizeOfId + MaxBodySize;
+
+		public const int IdImmediateOrServerOrder = 0;
 
 		public int SerializedSize => SizeOfId + BodySize;
 
@@ -92,7 +68,13 @@ namespace OpenRA.Network
 			BodySize = bodySize;
 		}
 
-		public abstract Stream CopyTo(Stream stream);
+		public abstract void CopyTo(Stream stream, bool bodyOnly);
+
+		public void CopyTo(Stream stream)
+		{
+			CopyTo(stream, false);
+		}
+
 		protected Stream WriteId(Stream stream)
 		{
 			stream.Write(BitConverter.GetBytes(Id));
@@ -101,53 +83,55 @@ namespace OpenRA.Network
 
 		public StringBuilder ToString(StringBuilder sb, bool close)
 		{
-			sb.Append($"Frame [Id={Id}, BodySize={BodySize}, Type={Type}");
+			sb.Append($"Frame [SerializedSize={SerializedSize}, Id={Id}, BodySize={BodySize}, Type={Type}");
 			if (close)
 				sb.Append(']');
 
 			return sb;
 		}
+
+		public override string ToString()
+		{
+			var sb = new StringBuilder(128);
+			ToString(sb, true);
+			return sb.ToString();
+		}
 	}
 
 	public class OrderFrame : Frame
 	{
-		public const int SizeOfOrderType = sizeof(byte);
 		public const OrderType DefaultOrderType = OrderType.Fields;
 
 		public readonly byte[] Data;
 
 		public OrderFrame(int id, byte[] data)
-			: base(data.Length > 0 ? (OrderType)data[0] : DefaultOrderType, id, SizeOfOrderType + data.Length)
+			: base(data.Length > 0 ? (OrderType)data[0] : DefaultOrderType, id, data.Length)
 		{
 			Data = data;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public static OrderFrame CreateImmediate(byte[] data)
 		{
-			WriteId(stream);
+			return new OrderFrame(IdImmediateOrServerOrder, data);
+		}
+
+		public override void CopyTo(Stream stream, bool bodyOnly)
+		{
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteArray(Data);
-			return stream;
 		}
 	}
 
-	/// <summary>Frame type sent only by a client to the server.</summary>
-	public abstract class ClientFrame : Frame
-	{
-		protected ClientFrame(OrderType type, int id, int bodySize)
-			: base(type, id, bodySize) { }
-	}
+	public interface ISentByClient { }
 
-	/// <summary>Frame type sent only by the server to clients.</summary>
-	public abstract class ServerFrame : Frame
-	{
-		protected ServerFrame(OrderType type, int id, int bodySize)
-			: base(type, id, bodySize) { }
-	}
+	public interface ISentByServer { }
 
 	public sealed class HandshakeFrame : OrderFrame
 	{
 		public HandshakeFrame(byte[] body)
-			: base(IdImmediateOrder, body)
+			: base(IdImmediateOrServerOrder, body)
 		{
 			if (Type != OrderType.Handshake)
 				throw new ArgumentException($"nameof(OrderType) of type {OrderType.Handshake} expected.");
@@ -158,7 +142,7 @@ namespace OpenRA.Network
 	public sealed class SyncFrame : Frame
 	{
 		public const int SizeOfSyncFrame = SizeOfId + SizeOfBody;
-		public const int SizeOfBody = sizeof(byte) + sizeof(int) + sizeof(ulong);
+		public const int SizeOfBody = SizeOfOrderType + sizeof(int) + sizeof(ulong);
 
 		public readonly int SyncHash;
 		public readonly ulong DefeatState;
@@ -170,13 +154,14 @@ namespace OpenRA.Network
 			DefeatState = defeatState;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public override void CopyTo(Stream stream, bool bodyOnly)
 		{
-			WriteId(stream);
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteByte((byte)OrderType.SyncHash);
 			stream.WriteArray(BitConverter.GetBytes(SyncHash));
 			stream.WriteArray(BitConverter.GetBytes(DefeatState));
-			return stream;
 		}
 
 		public override string ToString()
@@ -187,7 +172,7 @@ namespace OpenRA.Network
 		}
 	}
 
-	public sealed class PingResponseFrame : ClientFrame
+	public sealed class PingResponseFrame : Frame, ISentByClient
 	{
 		public const int SizeOfBody = sizeof(byte) + sizeof(long) + sizeof(byte);
 
@@ -196,19 +181,20 @@ namespace OpenRA.Network
 		public readonly byte OrderQueueLength;
 
 		public PingResponseFrame(long requestRunTime, byte orderQueueLength)
-			: base(OrderType.Ping, IdImmediateOrder, SizeOfBody)
+			: base(OrderType.Ping, IdImmediateOrServerOrder, SizeOfBody)
 		{
 			RequestRunTime = requestRunTime;
 			OrderQueueLength = orderQueueLength;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public override void CopyTo(Stream stream, bool bodyOnly)
 		{
-			WriteId(stream);
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteByte((byte)OrderType.Ping);
 			stream.WriteArray(BitConverter.GetBytes(RequestRunTime));
 			stream.WriteByte(OrderQueueLength);
-			return stream;
 		}
 
 		public override string ToString()
@@ -219,9 +205,9 @@ namespace OpenRA.Network
 		}
 	}
 
-	public sealed class AckFrame : ServerFrame
+	public sealed class AckFrame : Frame, ISentByServer
 	{
-		public const int SizeOfBody = sizeof(byte) + sizeof(byte);
+		public const int SizeOfBody = SizeOfOrderType + sizeof(byte);
 
 		public readonly byte FrameCount;
 		public AckFrame(int frame, byte frameCount)
@@ -230,12 +216,13 @@ namespace OpenRA.Network
 			FrameCount = frameCount;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public override void CopyTo(Stream stream, bool bodyOnly)
 		{
-			WriteId(stream);
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteByte((byte)OrderType.Ack);
-			stream.WriteArray(BitConverter.GetBytes(FrameCount));
-			return stream;
+			stream.WriteByte(FrameCount);
 		}
 
 		public override string ToString()
@@ -246,26 +233,27 @@ namespace OpenRA.Network
 		}
 	}
 
-	public sealed class PingRequestFrame : ServerFrame
+	public sealed class PingRequestFrame : Frame, ISentByServer
 	{
-		public const int SizeOfBody = sizeof(byte) + SizeOfRunTime;
+		public const int SizeOfBody = SizeOfOrderType + SizeOfRunTime;
 
 		public const int SizeOfRunTime = sizeof(long);
 
 		public readonly long RunTime;
 
 		public PingRequestFrame(long runTime)
-			: base(OrderType.Ping, IdImmediateOrder, SizeOfBody)
+			: base(OrderType.Ping, IdImmediateOrServerOrder, SizeOfBody)
 		{
 			RunTime = runTime;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public override void CopyTo(Stream stream, bool bodyOnly)
 		{
-			WriteId(stream);
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteByte((byte)OrderType.Ping);
 			stream.WriteArray(BitConverter.GetBytes(RunTime));
-			return stream;
 		}
 
 		public override string ToString()
@@ -276,24 +264,25 @@ namespace OpenRA.Network
 		}
 	}
 
-	public sealed class TickScaleFrame : ServerFrame
+	public sealed class TickScaleFrame : Frame, ISentByServer
 	{
-		public const int SizeOfBody = sizeof(byte) + sizeof(float);
+		public const int SizeOfBody = SizeOfOrderType + sizeof(float);
 
 		public readonly float TickScale;
 
 		public TickScaleFrame(float tickScale)
-			: base(OrderType.TickScale, IdImmediateOrder, SizeOfBody)
+			: base(OrderType.TickScale, IdImmediateOrServerOrder, SizeOfBody)
 		{
 			TickScale = tickScale;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public override void CopyTo(Stream stream, bool bodyOnly)
 		{
-			WriteId(stream);
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteByte((byte)OrderType.TickScale);
 			stream.Write(TickScale);
-			return stream;
 		}
 
 		public override string ToString()
@@ -304,9 +293,9 @@ namespace OpenRA.Network
 		}
 	}
 
-	public sealed class DisconnectFrame : ServerFrame
+	public sealed class DisconnectFrame : Frame, ISentByServer
 	{
-		public const int SizeOfBody = sizeof(byte) + sizeof(int);
+		public const int SizeOfBody = SizeOfOrderType + sizeof(int);
 
 		public readonly int DisconnectClientId;
 
@@ -316,17 +305,50 @@ namespace OpenRA.Network
 			DisconnectClientId = disconnectClientId;
 		}
 
-		public override Stream CopyTo(Stream stream)
+		public override void CopyTo(Stream stream, bool bodyOnly)
 		{
-			WriteId(stream);
+			if (!bodyOnly)
+				WriteId(stream);
+
 			stream.WriteByte((byte)OrderType.Disconnect);
 			stream.WriteArray(BitConverter.GetBytes(DisconnectClientId));
-			return stream;
+		}
+	}
+
+	public interface IServerMessage
+	{
+		public int SerializedSize { get; }
+
+		void CopyTo(Stream stream);
+
+		public byte[] Serialize()
+		{
+			var ms = new MemoryStream(SerializedSize);
+			CopyTo(ms);
+			return ms.ToArray();
+		}
+	}
+
+	/// <summary>Used as intermediate format to send the same frame to multiple clients.</summary>
+	public sealed class SerializedMessage : IServerMessage
+	{
+		public readonly byte[] Data;
+
+		public int SerializedSize => Data.Length;
+
+		public SerializedMessage(ServerMessage source)
+		{
+			Data = ((IServerMessage)source).Serialize();
+		}
+
+		public void CopyTo(Stream stream)
+		{
+			stream.WriteArray(Data);
 		}
 	}
 
 	/// <summary>Initial response by server after accepting a new connection.</summary>
-	public sealed class ProtocolHandshakeFrame : IFrame
+	public sealed class ProtocolHandshakeMessage : IServerMessage
 	{
 		public const int SizeOfFrame = sizeof(int) + sizeof(int);
 
@@ -335,28 +357,60 @@ namespace OpenRA.Network
 		public int SerializedSize => SizeOfFrame;
 
 		/// <summary>
-		/// As assigned by the server to the client. Matches the player index.
+		/// As assigned by the server to the client. Matches the player index of the connection.
 		/// Used as `target` field in frames forwarded by the server to clients.
 		/// </summary>
 		public readonly int ClientId;
 
-		public ProtocolHandshakeFrame(int clientId)
+		public ProtocolHandshakeMessage(int clientId)
 		{
 			ProtocolVersion = Server.ProtocolVersion.Handshake;
 			ClientId = clientId;
 		}
 
-		public Stream CopyTo(Stream stream)
+		public void CopyTo(Stream stream)
 		{
 			stream.WriteArray(BitConverter.GetBytes(ProtocolVersion));
 			stream.WriteArray(BitConverter.GetBytes(ClientId));
-			return stream;
 		}
 
 		public StringBuilder ToString(StringBuilder sb, bool close)
 		{
-			sb.Append($"{nameof(ProtocolHandshakeFrame)} [{nameof(ProtocolVersion)}={ProtocolVersion}, {nameof(ClientId)}={ClientId}]");
+			sb.Append($"{nameof(ProtocolHandshakeMessage)} [{nameof(ProtocolVersion)}={ProtocolVersion}, {nameof(ClientId)}={ClientId}]");
 			return sb;
+		}
+	}
+
+	/// <summary>Only the server sends the `Source` field to clients to indicate the origin of the frame. The value is a player index of a connection.</summary>
+	public sealed class ServerMessage : IServerMessage
+	{
+		public const int SizeOfSizePrefix = sizeof(int);
+		public const int SizeOfSource = sizeof(int);
+
+		public const int SourceServer = 0;
+
+		/// <summary>The sender. The player index of the connection the frame originated from.</summary>
+		public readonly int Source;
+		public readonly Frame Frame;
+
+		public int SerializedSize => SizeOfSizePrefix + SizeOfSource + Frame.SerializedSize;
+
+		public ServerMessage(int source, Frame frame)
+		{
+			Source = source;
+			Frame = frame;
+		}
+
+		public ServerMessage(Frame frame)
+			: this(SourceServer, frame) { }
+
+		public void CopyTo(Stream stream)
+		{
+			// The frame size includes the frame id field, yet excludes the source field.
+			stream.WriteArray(BitConverter.GetBytes(Frame.SerializedSize));
+			stream.WriteArray(BitConverter.GetBytes(Source));
+			Frame.CopyTo(stream);
+			Console.WriteLine($"==== {Frame.SerializedSize} {Frame}");
 		}
 	}
 }

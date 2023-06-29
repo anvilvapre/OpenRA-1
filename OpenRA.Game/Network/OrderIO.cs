@@ -30,6 +30,11 @@ namespace OpenRA.Network
 				data.WriteArray(o.Serialize());
 		}
 
+		public OrderPacket(OrderFrame frame)
+		{
+			data = new MemoryStream(frame.Data);
+		}
+
 		public OrderPacket(MemoryStream data)
 		{
 			this.data = data;
@@ -61,6 +66,16 @@ namespace OpenRA.Network
 			data.CopyTo(ms);
 
 			return ms.GetBuffer();
+		}
+
+		public OrderFrame ToFrame(int id)
+		{
+			return new OrderFrame(id, data.ToArray());
+		}
+
+		public OrderFrame ToImmediateFrame()
+		{
+			return new OrderFrame(Frame.IdImmediateOrServerOrder, data.ToArray());
 		}
 
 		public static OrderPacket Combine(IEnumerable<OrderPacket> packets)

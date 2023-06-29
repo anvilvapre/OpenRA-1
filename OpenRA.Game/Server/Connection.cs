@@ -13,11 +13,11 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using OpenRA.Network;
 
 namespace OpenRA.Server
 {
@@ -41,7 +41,7 @@ namespace OpenRA.Server
 
 		long lastReceivedTime = 0;
 
-		readonly BlockingCollection<byte[]> sendQueue = new();
+		readonly BlockingCollection<IServerMessage> sendQueue = new();
 		readonly Queue<int> pingHistory = new();
 
 		public Connection(Server server, Socket socket, string authToken)
@@ -55,17 +55,6 @@ namespace OpenRA.Server
 				Name = $"Client communication ({EndPoint}",
 				IsBackground = true
 			}.Start((server, socket));
-		}
-
-		static byte[] CreatePingFrame()
-		{
-			var ms = new MemoryStream(21);
-			ms.WriteArray(BitConverter.GetBytes(13));
-			ms.WriteArray(BitConverter.GetBytes(0));
-			ms.WriteArray(BitConverter.GetBytes(0));
-			ms.WriteByte((byte)OrderType.Ping);
-			ms.WriteArray(BitConverter.GetBytes(Game.RunTime));
-			return ms.GetBuffer();
 		}
 
 		void SendReceiveLoop(object s)
@@ -137,7 +126,7 @@ namespace OpenRA.Server
 										server.OnConnectionPing(this, pingHistory.ToArray(), bytes[9]);
 									}
 									else
-										server.OnConnectionPacket(this, frame, bytes);
+										server.OnConnectionFrame(this, FrameIO.Convert(new OrderFrame(frame, bytes)));
 
 									expectLength = 8;
 									state = ReceiveState.Header;
@@ -154,12 +143,13 @@ namespace OpenRA.Server
 
 					// Regularly check player ping
 					if (lastPingSent.ElapsedMilliseconds > 1000)
-						if (TrySendData(CreatePingFrame()))
+						if (TrySendData(new ServerMessage(new PingRequestFrame(Game.RunTime))))
 							lastPingSent.Restart();
 
 					// Send all data immediately, we will block again on read
-					while (sendQueue.TryTake(out var data, 0))
+					while (sendQueue.TryTake(out var message, 0))
 					{
+						var data = message.Serialize();
 						var start = 0;
 						var length = data.Length;
 
@@ -193,14 +183,14 @@ namespace OpenRA.Server
 			}
 		}
 
-		public bool TrySendData(byte[] data)
+		public bool TrySendData(IServerMessage message)
 		{
 			if (sendQueue.IsAddingCompleted)
 				return false;
 
 			try
 			{
-				sendQueue.Add(data);
+				sendQueue.Add(message);
 				return true;
 			}
 			catch (InvalidOperationException)

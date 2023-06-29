@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using OpenRA.Network;
 
 namespace OpenRA.Server
 {
@@ -21,19 +22,19 @@ namespace OpenRA.Server
 
 		readonly Dictionary<int, List<long>> messageTracker = new();
 		readonly Server server;
-		readonly Action<Connection, int, int, byte[]> dispatchOrdersToClient;
+		readonly Action<Connection, IServerMessage> dispatchMessageToClient;
 		readonly Action<Connection, string, Dictionary<string, object>> sendLocalizedMessageTo;
 
-		public PlayerMessageTracker(Server server, Action<Connection, int, int, byte[]> dispatchOrdersToClient, Action<Connection, string, Dictionary<string, object>> sendLocalizedMessageTo)
+		public PlayerMessageTracker(Server server, Action<Connection, IServerMessage> dispatchOrdersToClient, Action<Connection, string, Dictionary<string, object>> sendLocalizedMessageTo)
 		{
 			this.server = server;
-			this.dispatchOrdersToClient = dispatchOrdersToClient;
+			this.dispatchMessageToClient = dispatchOrdersToClient;
 			this.sendLocalizedMessageTo = sendLocalizedMessageTo;
 		}
 
 		public void DisableChatUI(Connection conn, int time)
 		{
-			dispatchOrdersToClient(conn, 0, 0, new Order("DisableChatEntry", null, false) { ExtraData = (uint)time }.Serialize());
+			dispatchMessageToClient(conn, new ServerMessage(OrderFrame.CreateImmediate(new Order("DisableChatEntry", null, false) { ExtraData = (uint)time }.Serialize())));
 		}
 
 		public bool IsPlayerAtFloodLimit(Connection conn)

@@ -84,9 +84,8 @@ namespace OpenRA.Network
 		readonly MemoryStream ordersStream = new();
 
 		// Loaded from file and updated during gameplay
-		public int LastOrdersFrame { get; private set; }
-		public int LastSyncFrame { get; private set; }
-		byte[] lastSyncPacket = Array.Empty<byte>();
+		public int LastOrdersFrameId { get; private set; }
+		public SyncFrame LastSyncFrame { get; private set; }
 
 		// Loaded from file or set on game start
 		public Session.Global GlobalSettings { get; private set; }
@@ -100,7 +99,8 @@ namespace OpenRA.Network
 
 		public GameSave()
 		{
-			LastOrdersFrame = -1;
+			LastOrdersFrameId = -1;
+			LastSyncFrame = new SyncFrame(0, 0, 0);
 			Slots = new Dictionary<string, Session.Slot>();
 		}
 
@@ -118,9 +118,8 @@ namespace OpenRA.Network
 				if (rs.ReadInt32() != MetadataMarker)
 					throw new InvalidDataException("Invalid orasav file");
 
-				LastOrdersFrame = rs.ReadInt32();
-				LastSyncFrame = rs.ReadInt32();
-				lastSyncPacket = rs.ReadBytes(Order.SyncHashOrderLength);
+				LastOrdersFrameId = rs.ReadInt32();
+				LastSyncFrame = (SyncFrame)FrameIO.Convert(new OrderFrame(rs.ReadInt32(), rs.ReadBytes(SyncFrame.SizeOfBody)));
 
 				var globalSettings = MiniYaml.FromString(rs.ReadString(Encoding.UTF8, Connection.MaxOrderLength));
 				GlobalSettings = Session.Global.Deserialize(globalSettings[0].Value);
@@ -188,26 +187,17 @@ namespace OpenRA.Network
 			}
 		}
 
-		public void DispatchOrders(Connection conn, int frame, byte[] data)
+		public void DispatchOrders(Connection conn, Frame frame)
 		{
 			// Sync packet - we only care about the last value
-			if (data.Length > 0 && data[0] == (byte)OrderType.SyncHash && frame > LastSyncFrame)
-			{
-				if (data.Length != Order.SyncHashOrderLength)
-				{
-					Log.Write("debug", $"Dropped sync order with length {data.Length}. Expected length {Order.SyncHashOrderLength}.");
-					return;
-				}
+			if (frame.Type == OrderType.SyncHash && frame.Id > LastSyncFrame.Id)
+				LastSyncFrame = (SyncFrame)frame;
 
-				LastSyncFrame = frame;
-				lastSyncPacket = data;
-			}
-
-			if (frame <= LastOrdersFrame)
+			if (frame.Id <= LastOrdersFrameId)
 				return;
 
 			// Ignore immediate orders
-			if (data.Length > 0 && data[0] == 0xFE)
+			if (frame.Type == OrderType.Handshake)
 				return;
 
 			var clientSlot = clientsBySlotIndex.IndexOf(conn.PlayerIndex);
@@ -226,29 +216,29 @@ namespace OpenRA.Network
 				clientSlot = firstBotSlotIndex;
 			}
 
-			ordersStream.WriteArray(BitConverter.GetBytes(data.Length + 8));
-			ordersStream.WriteArray(BitConverter.GetBytes(frame));
+			ordersStream.WriteArray(BitConverter.GetBytes(frame.BodySize + sizeof(int) + sizeof(int)));
+			ordersStream.WriteArray(BitConverter.GetBytes(frame.Id));
 			ordersStream.WriteArray(BitConverter.GetBytes(clientSlot));
-			ordersStream.WriteArray(data);
-			LastOrdersFrame = frame;
+			frame.CopyTo(ordersStream, true);
+			LastOrdersFrameId = frame.Id;
 		}
 
-		public void ParseOrders(Session lobbyInfo, Action<int, int, byte[]> packetFn)
+		public void ParseOrders(Session lobbyInfo, Action<IServerMessage> packetFn)
 		{
 			// Send the trait data first to guarantee that it is available when needed
 			foreach (var kv in TraitData)
 			{
 				var data = new List<MiniYamlNode>() { new MiniYamlNode(kv.Key.ToString(), kv.Value) }.WriteToString();
-				packetFn(0, 0, Order.FromTargetString("SaveTraitData", data, true).Serialize());
+				packetFn(new ServerMessage(OrderFrame.CreateImmediate(Order.FromTargetString("SaveTraitData", data, true).Serialize())));
 			}
 
 			ordersStream.Seek(0, SeekOrigin.Begin);
 			while (ordersStream.Position < ordersStream.Length)
 			{
 				var dataLength = ordersStream.ReadInt32() - 8;
-				var frame = ordersStream.ReadInt32();
+				var frameId = ordersStream.ReadInt32();
 				var slot = ordersStream.ReadInt32();
-				var data = ordersStream.ReadBytes(dataLength);
+				var frame = FrameIO.Convert(new OrderFrame(frameId, ordersStream.ReadBytes(dataLength)));
 
 				// Remap bot orders to their controller client
 				var clientIndex = clientsBySlotIndex[slot];
@@ -256,11 +246,11 @@ namespace OpenRA.Network
 				if (client.Bot != null)
 					clientIndex = client.BotControllerClientIndex;
 
-				packetFn(frame, clientIndex, data);
+				packetFn(new ServerMessage(clientIndex, frame));
 			}
 
 			// Send sync hash to validate restore
-			packetFn(LastSyncFrame, 0, lastSyncPacket);
+			packetFn(new ServerMessage(LastSyncFrame));
 		}
 
 		public void AddTraitData(int traitIndex, MiniYaml data)
@@ -289,9 +279,8 @@ namespace OpenRA.Network
 			ordersStream.Seek(0, SeekOrigin.Begin);
 			ordersStream.CopyTo(file);
 			file.Write(BitConverter.GetBytes(MetadataMarker), 0, 4);
-			file.Write(BitConverter.GetBytes(LastOrdersFrame), 0, 4);
-			file.Write(BitConverter.GetBytes(LastSyncFrame), 0, 4);
-			file.Write(lastSyncPacket, 0, Order.SyncHashOrderLength);
+			file.Write(BitConverter.GetBytes(LastOrdersFrameId), 0, 4);
+			LastSyncFrame.CopyTo(file);
 
 			var globalSettingsNodes = new List<MiniYamlNode>() { GlobalSettings.Serialize() };
 			file.WriteString(Encoding.UTF8, globalSettingsNodes.WriteToString());

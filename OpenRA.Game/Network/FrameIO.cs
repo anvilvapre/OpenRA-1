@@ -43,7 +43,7 @@ namespace OpenRA.Network
 			{
 				var id = int.MinValue;
 				var size = body.Length;
-				if (size < Frame.SizeOfId || size > Frame.MaxSize)
+				if (size < Frame.SizeOfId || size > Frame.SizeOfId + Frame.MaxBodySize)
 					throw CreateValueException(incomingConn, size, id, "Size", $"{size}");
 
 				var offset = 0;
@@ -100,7 +100,7 @@ namespace OpenRA.Network
 			static PingRequestFrame ParsePingRequest(OrderFrame source)
 			{
 				ValidateBodySize(source, OrderType.Ping, PingRequestFrame.SizeOfBody);
-				ValidateId(source, OrderType.Ping, Frame.IdImmediateOrder);
+				ValidateId(source, OrderType.Ping, Frame.IdImmediateOrServerOrder);
 
 				var body = source.Data.AsSpan();
 				var runTime = MemoryMarshal.Read<long>(body.Slice(OrderFrame.SizeOfOrderType, sizeof(long)));
@@ -113,7 +113,7 @@ namespace OpenRA.Network
 			static PingResponseFrame ParsePingResponse(OrderFrame source)
 			{
 				ValidateBodySize(source, OrderType.Ping, PingResponseFrame.SizeOfBody);
-				ValidateId(source, OrderType.Ping, Frame.IdImmediateOrder);
+				ValidateId(source, OrderType.Ping, Frame.IdImmediateOrServerOrder);
 
 				var body = source.Data.AsSpan();
 				var runTime = MemoryMarshal.Read<long>(body.Slice(OrderFrame.SizeOfOrderType, sizeof(long)));

@@ -223,7 +223,6 @@ namespace OpenRA
 				// HACK: this can hopefully go away in the future
 				TextNotificationsManager.Debug("Ignoring malformed order that would have crashed the game");
 				TextNotificationsManager.Debug("Please file a bug report and include the replay from this match");
-
 				return null;
 			}
 		}
