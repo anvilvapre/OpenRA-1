@@ -17,7 +17,14 @@ namespace OpenRA.Network
 {
 	public class OrderPacket
 	{
+		public static readonly OrderPacket Empty = new();
 		readonly MemoryStream data;
+
+		OrderPacket()
+		{
+			data = new MemoryStream(0);
+		}
+
 		public OrderPacket(IEnumerable<Order> orders)
 		{
 			// Orders may refer to actors that no longer exist by the time

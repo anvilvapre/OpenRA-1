@@ -24,7 +24,7 @@ namespace OpenRA.Network
 
 		readonly SyncReport syncReport;
 		readonly Dictionary<int, Dictionary<int, OrderPacket>> pendingOrders = new();
-		readonly Dictionary<int, (int SyncHash, ulong DefeatState)> syncForFrame = new();
+		readonly Dictionary<int, SyncFrame> syncForFrame = new();
 
 		public Session LobbyInfo = new();
 
@@ -137,34 +137,34 @@ namespace OpenRA.Network
 			localImmediateOrders.Clear();
 		}
 
-		public void ReceiveDisconnect(int clientId, int frame)
+		public void ReceiveDisconnect(DisconnectFrame frame)
 		{
 			// All clients must process the disconnect on the same world tick to allow synced actions to run deterministically.
 			// The server guarantees that we will not receive any more order packets from this client from this frame, so we
 			// can insert a marker in the orders stream and process the synced disconnect behaviours on the first tick of that frame.
 			if (GameStarted)
-				ReceiveOrders(clientId, (frame, ClientDisconnected));
+				ReceiveOrders(frame.DisconnectClientId, (frame.Id, ClientDisconnected));
 
 			// The Client state field is not synced; update it immediately so it can be shown in the UI
-			var client = LobbyInfo.ClientWithIndex(clientId);
+			var client = LobbyInfo.ClientWithIndex(frame.DisconnectClientId);
 			if (client != null)
 				client.State = Session.ClientState.Disconnected;
 		}
 
-		public void ReceiveSync((int Frame, int SyncHash, ulong DefeatState) sync)
+		public void ReceiveSync(SyncFrame frame)
 		{
-			if (syncForFrame.TryGetValue(sync.Frame, out var s))
+			if (syncForFrame.TryGetValue(frame.Id, out var sf))
 			{
-				if (s.SyncHash != sync.SyncHash || s.DefeatState != sync.DefeatState)
-					OutOfSync(sync.Frame);
+				if (frame.SyncHash != sf.SyncHash || frame.DefeatState != sf.DefeatState)
+					OutOfSync(frame.Id);
 			}
 			else
-				syncForFrame.Add(sync.Frame, (sync.SyncHash, sync.DefeatState));
+				syncForFrame.Add(frame.Id, frame);
 		}
 
-		public void ReceiveTickScale(float scale)
+		public void ReceiveTickScale(TickScaleFrame frame)
 		{
-			tickScale = scale;
+			tickScale = frame.TickScale;
 		}
 
 		public void ReceiveImmediateOrders(int clientId, OrderPacket orders)
@@ -259,10 +259,10 @@ namespace OpenRA.Network
 					if (World.Players[i].WinState == WinState.Lost)
 						defeatState |= 1UL << i;
 
-				Connection.SendSync(NetFrameNumber, World.SyncHash(), defeatState);
+				Connection.SendSync(new SyncFrame(NetFrameNumber, World.SyncHash(), defeatState));
 			}
 			else
-				Connection.SendSync(NetFrameNumber, 0, 0);
+				Connection.SendSync(new SyncFrame(NetFrameNumber, 0, 0));
 
 			if (generateSyncReport)
 				using (new PerfSample("sync_report"))

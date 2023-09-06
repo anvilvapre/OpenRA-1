@@ -146,7 +146,7 @@ namespace OpenRA.Network
 				ValidateBodySize(source, OrderType.TickScale, TickScaleFrame.SizeOfBody);
 
 				var body = source.Data.AsSpan();
-				var tickScale = MemoryMarshal.Read<float>(body.Slice(OrderFrame.SizeOfOrderType, sizeof(float)));
+				var tickScale = MemoryMarshal.Read<float>(body.Slice(Frame.SizeOfOrderType, sizeof(float)));
 				return new TickScaleFrame(tickScale);
 			}
 
@@ -155,13 +155,13 @@ namespace OpenRA.Network
 				ValidateBodySize(source, OrderType.Disconnect, DisconnectFrame.SizeOfBody);
 
 				var body = source.Data.AsSpan();
-				var disconnectClientId = MemoryMarshal.Read<int>(body.Slice(OrderFrame.SizeOfOrderType, sizeof(int)));
+				var disconnectClientId = MemoryMarshal.Read<int>(body.Slice(Frame.SizeOfOrderType, sizeof(int)));
 				return new DisconnectFrame(source.Id, disconnectClientId);
 			}
 
 			static Frame ParseHandshake(OrderFrame source)
 			{
-				if (source.BodySize < OrderFrame.SizeOfOrderType)
+				if (source.BodySize < Frame.SizeOfOrderType)
 					throw CreateInvalidValueException(source, OrderType.Handshake, nameof(Frame.BodySize), $"{source.BodySize}");
 
 				return new HandshakeFrame(source.Data);

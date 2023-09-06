@@ -35,14 +35,14 @@ namespace OpenRA.Network
 		void StartGame();
 		void Send(int frame, IEnumerable<Order> orders);
 		void SendImmediate(IEnumerable<Order> orders);
-		void SendSync(int frame, int syncHash, ulong defeatState);
+		void SendSync(SyncFrame frame);
 		void Receive(OrderManager orderManager);
 	}
 
 	public sealed class EchoConnection : IConnection
 	{
 		const int LocalClientId = 1;
-		readonly Queue<(int Frame, int SyncHash, ulong DefeatState)> sync = new();
+		readonly Queue<SyncFrame> sync = new();
 		readonly Queue<(int Frame, OrderPacket Orders)> orders = new();
 		readonly Queue<OrderPacket> immediateOrders = new();
 		bool disposed;
@@ -65,9 +65,9 @@ namespace OpenRA.Network
 			immediateOrders.Enqueue(new OrderPacket(o));
 		}
 
-		void IConnection.SendSync(int frame, int syncHash, ulong defeatState)
+		void IConnection.SendSync(SyncFrame frame)
 		{
-			sync.Enqueue((frame, syncHash, defeatState));
+			sync.Enqueue(frame);
 		}
 
 		void IConnection.Receive(OrderManager orderManager)
@@ -100,12 +100,12 @@ namespace OpenRA.Network
 	{
 		public readonly ConnectionTarget Target;
 		internal ReplayRecorder Recorder { get; private set; }
-		readonly Queue<(int Frame, int SyncHash, ulong DefeatState)> sentSync = new();
-		readonly Queue<(int Frame, int SyncHash, ulong DefeatState)> queuedSyncPackets = new();
+		readonly Queue<SyncFrame> sentSync = new();
+		readonly Queue<SyncFrame> queuedSyncFrames = new();
 
 		readonly Queue<(int Frame, OrderPacket Orders)> sentOrders = new();
 		readonly Queue<OrderPacket> sentImmediateOrders = new();
-		readonly ConcurrentQueue<(int FromClient, byte[] Data)> receivedPackets = new();
+		readonly ConcurrentQueue<(int FromClient, Frame Frame)> receivedPackets = new();
 		TcpClient tcp;
 		volatile ConnectionState connectionState = ConnectionState.Connecting;
 		volatile int clientId;
@@ -213,7 +213,9 @@ namespace OpenRA.Network
 					var buf = stream.ReadBytes(len);
 					if (len == 0)
 						throw new NotImplementedException();
-					receivedPackets.Enqueue((client, buf));
+
+					var frame = FrameIO.Parse(client, buf);
+					receivedPackets.Enqueue((client, frame));
 				}
 			}
 			catch (Exception ex)
@@ -235,51 +237,84 @@ namespace OpenRA.Network
 		{
 			var o = new OrderPacket(orders);
 			sentOrders.Enqueue((frame, o));
-			Send(o.Serialize(frame));
+			Send(o.ToFrame(frame));
 		}
 
 		void IConnection.SendImmediate(IEnumerable<Order> orders)
 		{
 			var o = new OrderPacket(orders);
 			sentImmediateOrders.Enqueue(o);
-			Send(o.Serialize(0));
+			Send(o.ToFrame(0));
 		}
 
-		void IConnection.SendSync(int frame, int syncHash, ulong defeatState)
+		void IConnection.SendSync(SyncFrame frame)
 		{
 			// Send sync packets together with the next set of orders.
 			// This was originally explained as reducing network bandwidth
 			// (TCP overhead?), but the original discussions have been lost to time.
 			// Add the sync packets to the send queue before adding them to the local sync queue in the Send() method.
 			// Otherwise the client will process the local sync queue before sending the packet.
-			queuedSyncPackets.Enqueue((frame, syncHash, defeatState));
+			queuedSyncFrames.Enqueue(frame);
 		}
 
-		void Send(byte[] packet)
+		void Send(Frame frame)
 		{
 			try
 			{
-				var ms = new MemoryStream();
-				ms.WriteArray(BitConverter.GetBytes(packet.Length));
-				ms.WriteArray(packet);
+				var ms = new MemoryStream(frame.SerializedSize + queuedSyncFrames.Count * SyncFrame.SizeOfSyncFrame);
+				frame.CopyTo(ms);
 
-				foreach (var s in queuedSyncPackets)
+				foreach (var syncFrame in queuedSyncFrames)
 				{
-					var q = OrderIO.SerializeSync(s);
-
-					ms.WriteArray(BitConverter.GetBytes(q.Length));
-					ms.WriteArray(q);
-
-					sentSync.Enqueue(s);
+					syncFrame.CopyTo(ms);
+					sentSync.Enqueue(syncFrame);
 				}
 
-				queuedSyncPackets.Clear();
+				queuedSyncFrames.Clear();
 				ms.WriteTo(tcp.GetStream());
 			}
 			catch (SocketException) { /* drop this on the floor; we'll pick up the disconnect from the reader thread */ }
 			catch (ObjectDisposedException) { /* ditto */ }
 			catch (InvalidOperationException) { /* ditto */ }
 			catch (IOException) { /* ditto */ }
+		}
+
+		void ProcessPingRequest(PingRequestFrame frame, OrderManager orderManager)
+		{
+			// Note that processing this here, rather than in NetworkConnectionReceive,
+			// so that poor world tick performance can be reflected in the latency measurement
+			Send(new PingResponseFrame(frame.RunTime, (byte)orderManager.OrderQueueLength));
+		}
+
+		OrderFrame ProcessAck(AckFrame frame)
+		{
+			if (frame.FrameCount > sentOrders.Count)
+				throw new InvalidOperationException($"Received Ack for {frame.FrameCount} > {sentOrders.Count} frames. {frame}.");
+
+			// The Acknowledgement packet is a placeholder that tells us to process the first packet in our
+			// local sent buffer and the frame at which it should be applied. This is an optimization to avoid having
+			// to send the (much larger than 5 byte) packet back to us over the network.
+			OrderPacket orderData;
+			if (frame.FrameCount != 1)
+			{
+				var orders = Enumerable.Range(0, frame.FrameCount)
+					.Select(i => sentOrders.Dequeue().Orders);
+				orderData = OrderPacket.Combine(orders);
+			}
+			else
+				orderData = sentOrders.Dequeue().Orders;
+
+			return orderData.ToFrame(frame.Id);
+		}
+
+		public static void ProcessOrderData(int fromClient, OrderFrame frame, OrderManager orderManager)
+		{
+			// Frames are often empty.
+			var orderData = frame.BodySize == 0 ? OrderPacket.Empty : new OrderPacket(frame);
+			if (frame.Id == 0)
+				orderManager.ReceiveImmediateOrders(fromClient, orderData);
+			else
+				orderManager.ReceiveOrders(fromClient, (frame.Id, orderData));
 		}
 
 		void IConnection.Receive(OrderManager orderManager)
@@ -299,62 +334,45 @@ namespace OpenRA.Network
 			while (sentSync.TryDequeue(out var s))
 			{
 				orderManager.ReceiveSync(s);
-				Recorder?.Receive(clientId, OrderIO.SerializeSync(s));
+				Recorder?.Receive(clientId, ((IFrame)s).Serialize());
 			}
 
 			// Orders from other players
-			while (receivedPackets.TryDequeue(out var p))
+			while (receivedPackets.TryDequeue(out var d))
 			{
-				if (OrderIO.TryParseDisconnect(p, out var disconnect))
+				var frame = d.Frame;
+				var frameToRecord = frame;
+				switch (d.Frame.Type)
 				{
-					orderManager.ReceiveDisconnect(disconnect.ClientId, disconnect.Frame);
-					Recorder?.Receive(p.FromClient, p.Data);
+					case OrderType.None:
+						// Pass
+						break;
+					case OrderType.Ack:
+						frameToRecord = ProcessAck((AckFrame)frame);
+						break;
+					case OrderType.Ping:
+						ProcessPingRequest((PingRequestFrame)frame, orderManager);
+						break;
+					case OrderType.SyncHash:
+						orderManager.ReceiveSync((SyncFrame)frame);
+						break;
+					case OrderType.TickScale:
+						orderManager.ReceiveTickScale((TickScaleFrame)frame);
+						break;
+					case OrderType.Disconnect:
+						orderManager.ReceiveDisconnect((DisconnectFrame)frame);
+						break;
+					case OrderType.Handshake:
+						break;
+					case OrderType.Fields:
+						ProcessOrderData(d.FromClient, (OrderFrame)frame, orderManager);
+						break;
+					default:
+						// FrameIO should already have caught this earlier during deserialization.
+						throw new InvalidDataException($"Unsupported frame {nameof(d.Frame.Type)} {d.Frame.Type}. {d.Frame}.");
 				}
-				else if (OrderIO.TryParseSync(p.Data, out var sync))
-				{
-					orderManager.ReceiveSync(sync);
-					Recorder?.Receive(p.FromClient, p.Data);
-				}
-				else if (OrderIO.TryParseTickScale(p, out var scale))
-					orderManager.ReceiveTickScale(scale);
-				else if (OrderIO.TryParsePingRequest(p, out var timestamp))
-				{
-					// Note that processing this here, rather than in NetworkConnectionReceive,
-					// so that poor world tick performance can be reflected in the latency measurement
-					Send(OrderIO.SerializePingResponse(timestamp, (byte)orderManager.OrderQueueLength));
-				}
-				else if (OrderIO.TryParseAck(p, out var ackFrame, out var ackCount))
-				{
-					if (ackCount > sentOrders.Count)
-						throw new InvalidOperationException($"Received Ack for {ackCount} > {sentOrders.Count} frames.");
 
-					// The Acknowledgement packet is a placeholder that tells us to process the first packet in our
-					// local sent buffer and the frame at which it should be applied. This is an optimization to avoid having
-					// to send the (much larger than 5 byte) packet back to us over the network.
-					OrderPacket packet;
-					if (ackCount != 1)
-					{
-						var orders = Enumerable.Range(0, ackCount)
-							.Select(i => sentOrders.Dequeue().Orders);
-						packet = OrderPacket.Combine(orders);
-					}
-					else
-						packet = sentOrders.Dequeue().Orders;
-
-					orderManager.ReceiveOrders(clientId, (ackFrame, packet));
-					Recorder?.Receive(clientId, packet.Serialize(ackFrame));
-				}
-				else if (OrderIO.TryParseOrderPacket(p.Data, out var orders))
-				{
-					if (orders.Frame == 0)
-						orderManager.ReceiveImmediateOrders(p.FromClient, orders.Orders);
-					else
-						orderManager.ReceiveOrders(p.FromClient, orders);
-
-					Recorder?.Receive(p.FromClient, p.Data);
-				}
-				else
-					throw new InvalidDataException($"Received unknown packet from client {p.FromClient} with length {p.Data.Length}");
+				Recorder?.Receive(clientId, ((IFrame)frameToRecord).Serialize());
 
 				// An immediate order may trigger a chain of actions that disposes the OrderManager and connection.
 				// Bail out to avoid potential problems from acting on disposed objects.
