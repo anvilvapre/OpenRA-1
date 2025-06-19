@@ -374,12 +374,13 @@ namespace OpenRA.Traits
 			var cellRange = (r.Length + 1023) / 1024;
 			var tl = centerCell - new CVec(cellRange, cellRange);
 			var br = centerCell + new CVec(cellRange, cellRange);
+			var rs = r.LengthSquared;
 
 			// Target ranges are calculated in 2D, so ignore height differences
 			return partitionedFrozenActors.InBox(Rectangle.FromLTRB(tl.X, tl.Y, br.X, br.Y))
 				.Where(fa => fa.IsValid &&
 					(!onlyVisible || fa.Visible) &&
-					(fa.CenterPosition - origin).HorizontalLengthSquared <= r.LengthSquared);
+					(fa.CenterPosition - origin).HorizontalLengthSquared <= rs);
 		}
 	}
 }

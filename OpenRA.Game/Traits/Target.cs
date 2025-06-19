@@ -198,8 +198,10 @@ namespace OpenRA.Traits
 			if (Type == TargetType.Invalid)
 				return false;
 
+			var rs = range.LengthSquared;
+
 			// Target ranges are calculated in 2D, so ignore height differences
-			return Positions.Any(t => (t - origin).HorizontalLengthSquared <= range.LengthSquared);
+			return Positions.Any(t => (t - origin).HorizontalLengthSquared <= rs);
 		}
 
 		public override string ToString()

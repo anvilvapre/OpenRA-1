@@ -70,8 +70,9 @@ namespace OpenRA
 		{
 			// Target ranges are calculated in 2D, so ignore height differences
 			var vec = new WVec(r, r, WDist.Zero);
+			var rs = r.LengthSquared;
 			return world.ActorMap.ActorsInBox(origin - vec, origin + vec).Where(
-				a => (a.CenterPosition - origin).HorizontalLengthSquared <= r.LengthSquared);
+				a => (a.CenterPosition - origin).HorizontalLengthSquared <= rs);
 		}
 
 		public static bool ContainsTemporaryBlocker(this World world, CPos cell, Actor ignoreActor = null)
